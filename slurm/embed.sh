@@ -8,4 +8,5 @@
 #SBATCH --cpus-per-gpu=10
 #SBATCH --partition=gpu
 
+bash setup.sh
 python scripts/embed_sources.py
