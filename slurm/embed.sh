@@ -1,4 +1,5 @@
-#!/bin/sh
+#!/bin/bash
+
 #SBATCH -N 1
 #SBATCH -n 1
 #SBATCH --time=80:00:00
@@ -8,5 +9,4 @@
 #SBATCH --cpus-per-gpu=10
 #SBATCH --partition=gpu
 
-bash setup.sh
 python scripts/embed_sources.py
