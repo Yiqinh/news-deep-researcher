@@ -8,7 +8,7 @@
 #SBATCH --cpus-per-gpu=10
 #SBATCH --partition=isi
 
-source conda activate deepresearch
-cd project/jonmay_231/spangher/news-deep-researcher
+conda activate deepresearch
+cd /project/jonmay_231/spangher/news-deep-researcher
 
 python scripts/embed_sources.py
