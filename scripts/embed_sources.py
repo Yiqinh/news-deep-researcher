@@ -25,7 +25,7 @@ def load_documents(data_file):
         articles = json.load(f)
     
     document_list = []
-    for news_article in articles[:1]:
+    for news_article in articles:
         for source in news_article['sources']:
             # append all source information to embedding
             embed_string = ""
