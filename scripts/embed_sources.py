@@ -48,7 +48,7 @@ def parse_args():
     parser.add_argument(
         "--model",
         type=str,
-        default="sentence-transformers/all-MiniLM-L6-v2",
+        default="Qwen/Qwen3-Embedding-8B",
         help="Name or path of the embedding model to use"
     )
     parser.add_argument(
