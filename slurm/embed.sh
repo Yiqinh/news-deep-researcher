@@ -8,8 +8,7 @@
 #SBATCH --cpus-per-gpu=10
 #SBATCH --partition=isi
 
-source conda activate CIR
+source conda activate deepresearch
 cd project/jonmay_231/spangher/news-deep-researcher
 
-pip install -qU langchain-community faiss-gpu
 python scripts/embed_sources.py

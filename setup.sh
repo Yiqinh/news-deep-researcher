@@ -1,2 +1,2 @@
 pip install -qU langchain-huggingface
-pip install -qU langchain-community faiss-gpu
+pip install langchain_community
