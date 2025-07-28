@@ -54,7 +54,7 @@ def parse_args():
     parser.add_argument(
         "--data-file",
         type=str,
-        default='../data/article_sources.json',
+        default='./data/article_sources.json',
         help="Path to the data file to process"
     )
     parser.add_argument(
