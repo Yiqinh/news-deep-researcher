@@ -9,4 +9,4 @@
 #SBATCH --partition=isi
 
 cd /project/jonmay_231/spangher/news-deep-researcher
-python scripts/embed_sources.py
+python scripts/retriever_vanilla.py

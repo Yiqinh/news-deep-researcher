@@ -1,7 +1,6 @@
 import argparse
 import json
 from uuid import uuid4
-import faiss
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.documents import Document
 from langchain_community.docstore.in_memory import InMemoryDocstore
@@ -17,6 +16,7 @@ def main(model, data_file, index_name):
         documents=documents,
         embedding=embeddings
     )
+    print("saving index to: ", index_name)
     vectorstore.save_local(index_name)
 
 def load_documents(data_file):
