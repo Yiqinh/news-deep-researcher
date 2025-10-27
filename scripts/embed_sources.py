@@ -24,7 +24,6 @@ def load_documents(data_file):
     # load source documents from json file
     with open(data_file, "r") as f:
         articles = json.load(f)
-        articles = articles[:2]
     
     document_list = []
     for news_article in articles:
