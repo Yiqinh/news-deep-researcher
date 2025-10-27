@@ -36,6 +36,8 @@ def load_documents(data_file):
             # make document
             source_metadata = news_article['sources_metadata']
             source_metadata['source'] = source
+            source_metadata['starting_query'] = news_article['starting_query']
+            source_metadata['article'] = news_article['article']
             source_document = Document(
                 page_content=embed_string,
                 metadata=source_metadata
