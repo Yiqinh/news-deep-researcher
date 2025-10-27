@@ -12,6 +12,7 @@ def main(model, data_file, index_name):
     # load retrieval documents
     documents = load_documents(data_file)
     # make vectorstore
+    print(f"Embedding Model: {model}")
     vectorstore = FAISS.from_documents(
         documents=documents,
         embedding=embeddings
@@ -23,6 +24,7 @@ def load_documents(data_file):
     # load source documents from json file
     with open(data_file, "r") as f:
         articles = json.load(f)
+        articles = articles[:2]
     
     document_list = []
     for news_article in articles:
@@ -48,13 +50,13 @@ def parse_args():
     parser.add_argument(
         "--model",
         type=str,
-        default="Qwen/Qwen3-Embedding-4B",
+        default="Qwen/Qwen3-Embedding-8B",
         help="Name or path of the embedding model to use"
     )
     parser.add_argument(
         "--data-file",
         type=str,
-        default='./data/article_sources.json',
+        default='./data/v1_data/article_sources.json',
         help="Path to the data file to process"
     )
     parser.add_argument(
