@@ -22,6 +22,7 @@ def main(model, data_file, index_name):
 
 def load_documents(data_file):
     # load source documents from json file
+    print(f"Loading Dataset:  {data_file}")
     with open(data_file, "r") as f:
         articles = json.load(f)
     
