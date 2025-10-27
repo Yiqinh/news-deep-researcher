@@ -47,25 +47,25 @@ def expand_dataset_batch(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return all_articles
 
 
-def process_json_file(input_file: str, output_file: str, method: str = "batch", num_points=1000):
+def process_json_file(input_file: str, output_file: str, method: str = "batch", num_points=10000):
 
     print(f"Loading data from: {input_file}")
     with open(input_file, 'r') as f:
         data = json.load(f)
 
-    data = data[:num_points]
-    random.shuffle(data)
-
     print(f"Loaded {len(data)} articles")
     
     combinations = expand_dataset_batch(data)
+    random.shuffle(combinations)
+    combinations = combinations[:num_points]
+
     with open(output_file, 'w') as f:
         json.dump(combinations, f, indent=2)
     print(f"Number of datapoints (Combinations): {len(combinations)}")
 
 if __name__ == "__main__":
-    input_file = "/Users/yiqinhuang/NLP/news-deep-researcher/data/Article_Sources.json"
-    output_file = "expanded_dataset.json"
+    input_file = "/Users/yiqinhuang/NLP/news-deep-researcher/notebooks/news_data_train.json"
+    output_file = "expanded_train_10000.json"
     
     process_json_file(input_file, output_file)
     
