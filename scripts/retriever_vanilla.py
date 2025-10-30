@@ -18,19 +18,19 @@ def parse_args():
     parser.add_argument(
         "--model_name",
         type=str,
-        default="Qwen/Qwen3-Embedding-4B",
+        default="Qwen/Qwen3-Embedding-8B",
         help="Name or path of the embedding model to use"
     )
     parser.add_argument(
         "--index_name",
         type=str,
-        default='./faiss_index_qwen4b',
+        default='./faiss_index_news_sources',
         help="path to the faiss index"
     )
     parser.add_argument(
         "--query_file",
         type=str,
-        default='./data/combined_queries.jsonl',
+        default='./data/query_generation_results_2.jsonl',
         help="path to file with starting queries"
     )
     parser.add_argument(
@@ -46,59 +46,35 @@ def main(model_name, index_name, query_file, output_path):
     # load queries
     print(f"Reading data from {query_file}...")
 
-    id_to_queries = {}
-    query_keys = set()
+    datapoints = []
 
     with open(query_file, 'r', encoding='utf-8') as f:
         for line in f:
             if not line.strip():
                 continue
-            
-            data = json.loads(line)
-            
-            custom_id = data.get('custom_id')
-            custom_id = custom_id[-5:] # get last 5 digits
-            generation_content = data.get('model_output')
-                        
-            if custom_id and generation_content:
-                # map custom_id to content
-                id_to_queries[custom_id] = generation_content
-                query_keys.add(custom_id)
-            else:
-                # skip if no custom id or no gen content
-                continue
-    
+            point = json.loads(line)
+            datapoints.append(point)
+        print(f"loaded {len(datapoints)} points...")
+
     # load index
     news_searcher = Searcher(index_name=index_name, model_name=model_name)
 
-    # store source custom keys
-    datastore_keys = set()
-    
-    # loop through custom keys in datastore
-    for doc_id, document in news_searcher.vectorstore.docstore._dict.items():
-        metadata = document.metadata
-        custom_id_string = metadata['custom_id']
-        custom_id = custom_id_string[-5:]
-        datastore_keys.add(custom_id)
-    
-    id_to_retrieval = {}
-    for id, query in tqdm(list(id_to_queries.items()), desc="retrieving documents..."):
-        if id not in datastore_keys:
-            # skip ids not in the datastore
-            continue
+    for point in tqdm(datapoints, desc="retrieving documents..."):
+        for query_dict in point['llm_response']['queries_only']:
+            query = query_dict['query']
 
-        document_list = news_searcher.search(query=query, k=10)
-        retrieval_result = []
+             # retrieval
+            document_list = news_searcher.search(query=query, k=10)
+            retrieval_result = []
+            for doc in document_list:
+                one_doc = {'page_content': doc.page_content, 'metadata': doc.metadata}
+                retrieval_result.append(one_doc)
 
-        for doc in document_list:
-            one_doc = {'page_content': doc.page_content, 'metadata': doc.metadata}
-            retrieval_result.append(one_doc)
-
-        id_to_retrieval[id] = retrieval_result
+            query_dict['retrieval'] = retrieval_result
 
     with open(output_path, "w", encoding="utf-8") as f:
         print("saved retrieval results: ", output_path)
-        json.dump(id_to_retrieval, f, indent=4, ensure_ascii=False)
+        json.dump(datapoints, f, indent=4, ensure_ascii=False)
     
 if __name__ == "__main__":
     args = parse_args()
