@@ -24,7 +24,7 @@ def parse_args():
     parser.add_argument(
         "--index_name",
         type=str,
-        default='./faiss_index_news_sources',
+        default='../faiss_index_news_sources',
         help="path to the faiss index"
     )
     parser.add_argument(
