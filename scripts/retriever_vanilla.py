@@ -39,9 +39,15 @@ def parse_args():
         default='retriever_output.json',
         help="output path"
     )
+    parser.add_argument(
+        "--k",
+        type=int,
+        default=10,
+        help="Number of top results to retrieve"
+    )
     return parser.parse_args()
 
-def main(model_name, index_name, query_file, output_path):
+def main(model_name, index_name, query_file, output_path, k):
 
     # load queries
     print(f"Reading data from {query_file}...")
@@ -64,7 +70,7 @@ def main(model_name, index_name, query_file, output_path):
             query = query_dict['query']
 
              # retrieval
-            document_list = news_searcher.search(query=query, k=10)
+            document_list = news_searcher.search(query=query, k=k)
             retrieval_result = []
             for doc in document_list:
                 one_doc = {'page_content': doc.page_content, 'metadata': doc.metadata}
@@ -78,6 +84,6 @@ def main(model_name, index_name, query_file, output_path):
     
 if __name__ == "__main__":
     args = parse_args()
-    main(args.model_name, args.index_name, args.query_file, args.output_path)
+    main(args.model_name, args.index_name, args.query_file, args.output_path, args.k)
 
 
