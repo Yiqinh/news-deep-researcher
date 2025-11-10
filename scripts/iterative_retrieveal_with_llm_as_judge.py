@@ -28,7 +28,7 @@ def parse_args():
     parser.add_argument(
         "--llm_model_name",
         type=str,
-        default="Qwen/Qwen2.5-3B-Instruct",
+        default="Qwen/Qwen2.5-72B-Instruct",
         help="Name or path of the Qwen LLM model to use for reasoning (e.g., Qwen/Qwen2.5-1.5B-Instruct, Qwen/Qwen2.5-3B-Instruct for CPU, Qwen/Qwen2.5-7B-Instruct for GPU)"
     )
     
@@ -48,7 +48,7 @@ def parse_args():
     parser.add_argument(
         "--output_path",
         type=str,
-        default='retriever_output.json',
+        default='../results/query_and_filter_sft_data_test.json',
         help="output path"
     )
     parser.add_argument(
@@ -174,18 +174,9 @@ Return **only** a single JSON object:
 def create_query_generation_retry_prompt(priors, article, starting_query, target, queries_tried, query_to_sources):
     """
     Create a gap-based retry prompt that learns from failed queries.
-    
-    Args:
-        priors: Prior sources
-        article: Article text
-        starting_query: Original starting query
-        target: Target source dict
-        queries_tried: List of queries that were tried and failed
-        query_to_sources: Dictionary mapping queries to their full retrieved source dictionaries
     """
     queries_tried_str = "\n".join([f"- '{q}'" for q in queries_tried])
     
-    # Format all retrieved sources for each query
     retrieved_sources_str = ""
     for i, query in enumerate(queries_tried, 1):
         retrieved_sources = query_to_sources.get(query, [])
@@ -336,7 +327,6 @@ def parse_response(priors, article, starting_query, target, full_response):
     else:
         queries_only = parsed_response.get('queries', [])
     
-    # Create the structured response object
     response_data = {
         "metadata": {
             "timestamp": datetime.now().isoformat(),
@@ -370,7 +360,6 @@ def call_llm(prompt, model_name="Qwen/Qwen2.5-3B-Instruct"):
             trust_remote_code=True
         )
     else:
-        # For CPU, use float32 for better compatibility
         model = AutoModelForCausalLM.from_pretrained(
             model_name,
             torch_dtype=torch.float32,
@@ -394,7 +383,6 @@ def call_llm(prompt, model_name="Qwen/Qwen2.5-3B-Instruct"):
         )
     
     response = tokenizer.decode(outputs[0], skip_special_tokens=False)
-    # Extract just the assistant's response
     response = extract_response(response, model_name)
     return response
 
@@ -524,9 +512,9 @@ def get_retrieved_sources(retrieval_results):
     if retrieval_results:
         first_metadata = retrieval_results[0].get('metadata', {})
         first_source = first_metadata.get('source', {})
-        print(f"[DEBUG] First result metadata keys: {list(first_metadata.keys())}")
-        print(f"[DEBUG] First result source keys: {list(first_source.keys())}")
-        print(f"[DEBUG] First result source: {first_source}")
+        #print(f"[DEBUG] First result metadata keys: {list(first_metadata.keys())}")
+        #print(f"[DEBUG] First result source keys: {list(first_source.keys())}")
+        #print(f"[DEBUG] First result source: {first_source}")
 
     for doc_result in retrieval_results:
         metadata = doc_result.get('metadata', {})
@@ -535,7 +523,7 @@ def get_retrieved_sources(retrieval_results):
     
     # Print source names for debugging
     source_names = [s.get('Name', '') for s in retrieved_sources]
-    print(f"[DEBUG] Retrieved source names: {source_names}")
+    #print(f"[DEBUG] Retrieved source names: {source_names}")
     
     return retrieved_sources
 
@@ -543,13 +531,6 @@ def get_retrieved_sources(retrieval_results):
 def get_all_retrieved_sources(queries_tried, all_retrieval_results):
     """
     Get all full source dictionaries retrieved from failed queries.
-    
-    Args:
-        queries_tried: List of query strings
-        all_retrieval_results: List of retrieval_result lists (one per query)
-    
-    Returns:
-        Dictionary mapping queries to their full retrieved source dictionaries
     """
     query_to_sources = {}
     for query, retrieval_result in zip(queries_tried, all_retrieval_results):
@@ -597,6 +578,9 @@ def main():
         model = model.to("cpu")
     print("[DEBUG] Model loaded successfully!")
 
+    # Collect enhanced datapoints
+    enhanced_dataset = []
+
     for datapoint in combined_dataset[:1]:
         
         article = datapoint['article']['article_text']
@@ -639,17 +623,19 @@ def main():
         news_searcher = Searcher(index_name=args.index_name, model_name=args.model_name)
 
         queries_tried = []
-        all_retrieval_results = []  # Store retrieval results from failed queries
+        all_retrieval_results = []  
         target_found = False
         rank = None
         total_attempts = 0
         max_attempts = args.max_attempts
+        target_query = None  
+        filter_set = None 
 
         # Call retriever for each query
         for query_dict in queries_only:
             # Check if we've reached max attempts
             if total_attempts >= max_attempts:
-                print(f"[DEBUG] ⚠️ Reached maximum attempts limit ({max_attempts}). Stopping.")
+                print(f"[DEBUG]  Reached maximum attempts limit ({max_attempts}). Stopping.")
                 break
                 
             query = query_dict['query']
@@ -676,22 +662,20 @@ def main():
                 if retrieved_source == target:
                     target_found = True
                     rank = i
+                    target_query = query  # Store the successful query
+                    filter_set = retrieval_result  # Store the full retrieval result (all k sources)
                     print(f"[DEBUG] ✅ Target source found at rank {rank}!")
                     break
             
             if target_found:
                 break
 
-        # If target not found and haven't reached max attempts, generate retry queries
-        # Keep generating retry queries until target found or max attempts reached
         while not target_found and queries_tried and total_attempts < max_attempts:
             remaining_attempts = max_attempts - total_attempts
             print(f"[DEBUG] Target source not found after {len(queries_tried)} queries. Generating retry queries... ({remaining_attempts} attempts remaining)")
             
-            # Get all retrieved sources from failed queries
             query_to_sources = get_all_retrieved_sources(queries_tried, all_retrieval_results)
             
-            # Generate retry prompt
             retry_prompt = create_query_generation_retry_prompt(
                 priors, article, starting_query, target, queries_tried, query_to_sources
             )
@@ -758,6 +742,8 @@ def main():
                         if retrieved_source == target:
                             target_found = True
                             rank = i
+                            target_query = retry_query  # Store the successful query
+                            filter_set = retrieval_result  # Store the full retrieval result (all k sources)
                             print(f"[DEBUG] Target source found at rank {rank} with retry query!")
                             break
                     
@@ -784,7 +770,23 @@ def main():
         if not target_found and total_attempts >= max_attempts:
             print(f"[DEBUG] Target source not found after {total_attempts} attempts (max limit: {max_attempts})")
         
+        # Create enhanced datapoint with new fields
+        enhanced_datapoint = datapoint.copy()
+        enhanced_datapoint['attempted_queries'] = queries_tried
+        enhanced_datapoint['target_query'] = target_query  # None if not found
+        enhanced_datapoint['filter_set'] = filter_set  # None if not found
         
+        enhanced_dataset.append(enhanced_datapoint)
+        print(f"[DEBUG] Processed datapoint. Target found: {target_found}, Target query: {target_query}")
+    
+    # Save enhanced dataset after processing all datapoints
+    output_file_path = os.path.join(proj_root, 'results', args.output_path)
+    os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
+    with open(output_file_path, 'w', encoding='utf-8') as f:
+        json.dump(enhanced_dataset, f, indent=2, ensure_ascii=False)
+    print(f"\n[DEBUG] Enhanced dataset saved to: {output_file_path}")
+    print(f"[DEBUG] Total datapoints: {len(enhanced_dataset)}")
+    
 
 
 
