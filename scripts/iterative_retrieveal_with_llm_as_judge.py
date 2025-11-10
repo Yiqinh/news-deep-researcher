@@ -14,7 +14,7 @@ proj_root = os.path.dirname(here)
 # add proj root to path
 sys.path.append(proj_root)
 
-#from src.searcher import *
+from src.searcher import *
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -335,8 +335,17 @@ def main():
         queries_only = parse_response(priors, article, starting_query, target, response)
         query_list = [q['query'] for q in queries_only]
 
+        #call retriever
         for q in query_list:
-            print(f"[DEBUG] Query: {q}")
+            document_list = news_searcher.search(query=q, k=k)
+            retrieval_result = []
+            for doc in document_list:
+                one_doc = {'page_content': doc.page_content, 'metadata': doc.metadata}
+                retrieval_result.append(one_doc)
+                print (f"[DEBUG] Retrieval result: {doc.metadata}")
+
+            #queries_only[q]['retrieval'] = retrieval_result
+
 
 
     
