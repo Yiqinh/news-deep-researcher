@@ -642,6 +642,7 @@ def main():
             print(f"[DEBUG] Searching with query: {query} (Attempt {total_attempts + 1}/{max_attempts})")
             queries_tried.append(query)
             total_attempts += 1
+            print(f"[DEBUG] Total attempts: {total_attempts}")
             
             # Retrieve
             document_list = news_searcher.search(query=query, k=args.k)
