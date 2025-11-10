@@ -331,8 +331,15 @@ def main():
         print(response)
         print(f"\nResponse saved to: {response_file_path}")
 
-    
 
+        queries_only = parse_response(priors, article, starting_query, target, response)
+        query_list = [q['query'] for q in queries_only]
+
+        for q in query_list:
+            print(f"[DEBUG] Query: {q}")
+
+
+    
 
 
 if __name__ == "__main__":
