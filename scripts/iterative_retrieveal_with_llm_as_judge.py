@@ -59,7 +59,7 @@ def parse_args():
     parser.add_argument(
         "--max_attempts",
         type=int,
-        default=20,
+        default=200,
         help="Maximum number of query attempts (initial + retry queries)"
     )
     return parser.parse_args()
