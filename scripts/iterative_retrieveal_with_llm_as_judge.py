@@ -4,6 +4,7 @@ import argparse
 import os
 import sys
 import json
+import re
 from datetime import datetime
 #from tqdm import tqdm
 
@@ -326,13 +327,14 @@ def llm_as_judge_prompt():
     return 
     
 def parse_response(priors, article, starting_query, target, full_response):
-    try:
-        parsed_response = json.loads(full_response)
-        queries_only = parsed_response.get('queries', [])
-    except json.JSONDecodeError:
+    parsed_response = extract_json_from_response(full_response)
+    
+    if parsed_response is None:
         queries_only = []
         parsed_response = None
         print("Warning: Could not parse full_response JSON")
+    else:
+        queries_only = parsed_response.get('queries', [])
     
     # Create the structured response object
     response_data = {
@@ -414,6 +416,105 @@ def extract_response(response, model_name):
     
     response = response.replace("<|im_start|>", "").replace("<|im_end|>", "").strip()
     return response
+
+
+def extract_json_from_response(response_text):
+    """
+    Extract JSON from LLM response, handling markdown code blocks and extra text.
+    
+    Args:
+        response_text: The raw response text from the LLM
+    
+    Returns:
+        Parsed JSON object, or None if extraction fails
+    """
+    if not response_text:
+        return None
+    
+    # Try to extract JSON from markdown code blocks
+    # Match ```json ... ``` or ``` ... ```
+    # First, find the code block markers
+    code_block_pattern = r'```(?:json)?\s*\n?(.*?)\n?```'
+    match = re.search(code_block_pattern, response_text, re.DOTALL)
+    if match:
+        json_str = match.group(1).strip()
+        # Try to find the JSON object within the code block
+        brace_start = json_str.find('{')
+        if brace_start != -1:
+            brace_count = 0
+            brace_end = -1
+            for i in range(brace_start, len(json_str)):
+                if json_str[i] == '{':
+                    brace_count += 1
+                elif json_str[i] == '}':
+                    brace_count -= 1
+                    if brace_count == 0:
+                        brace_end = i
+                        break
+            
+            if brace_end != -1:
+                json_str = json_str[brace_start:brace_end + 1]
+                try:
+                    return json.loads(json_str)
+                except json.JSONDecodeError:
+                    pass
+    
+    # Try to find JSON object in the text (look for { ... })
+    # Find the first { and try to match it with the closing }
+    brace_start = response_text.find('{')
+    if brace_start != -1:
+        # Try to find the matching closing brace
+        brace_count = 0
+        brace_end = -1
+        for i in range(brace_start, len(response_text)):
+            if response_text[i] == '{':
+                brace_count += 1
+            elif response_text[i] == '}':
+                brace_count -= 1
+                if brace_count == 0:
+                    brace_end = i
+                    break
+        
+        if brace_end != -1:
+            json_str = response_text[brace_start:brace_end + 1]
+            try:
+                return json.loads(json_str)
+            except json.JSONDecodeError:
+                pass
+    
+    # Try to parse the entire response as JSON (in case it's already clean JSON)
+    try:
+        return json.loads(response_text.strip())
+    except json.JSONDecodeError:
+        pass
+    
+    # If all else fails, try to fix common JSON issues
+    # Remove trailing commas before closing braces/brackets
+    fixed_text = re.sub(r',\s*}', '}', response_text)
+    fixed_text = re.sub(r',\s*]', ']', fixed_text)
+    
+    # Try to extract JSON again from fixed text
+    brace_start = fixed_text.find('{')
+    if brace_start != -1:
+        brace_count = 0
+        brace_end = -1
+        for i in range(brace_start, len(fixed_text)):
+            if fixed_text[i] == '{':
+                brace_count += 1
+            elif fixed_text[i] == '}':
+                brace_count -= 1
+                if brace_count == 0:
+                    brace_end = i
+                    break
+        
+        if brace_end != -1:
+            json_str = fixed_text[brace_start:brace_end + 1]
+            try:
+                return json.loads(json_str)
+            except json.JSONDecodeError:
+                pass
+    
+    return None
 
 
 def get_retrieved_sources(retrieval_results):
@@ -611,11 +712,17 @@ def main():
             print(retry_response)
             
             # Parse retry response
-            try:
-                retry_parsed = json.loads(retry_response)
+            retry_parsed = extract_json_from_response(retry_response)
+            
+            if retry_parsed is None:
+                print(f"[DEBUG] Could not extract JSON from retry response")
+                print(f"[DEBUG] Retry response was: {retry_response[:500]}...")
+                # Try to continue with empty queries instead of breaking
+                retry_queries = []
+            else:
                 retry_queries = retry_parsed.get('queries', [])
-                
-                if retry_queries:
+            
+            if retry_queries:
                     print(f"[DEBUG] Generated {len(retry_queries)} retry queries. Trying them now...")
                     
                     # Try retry queries (up to remaining attempts)
@@ -667,11 +774,11 @@ def main():
                         continue
                 else:
                     print("[DEBUG] No retry queries generated from LLM response")
-                    break  # Exit loop if no queries generated
-            except json.JSONDecodeError as e:
-                print(f"[DEBUG] Could not parse retry response as JSON: {e}")
-                print(f"[DEBUG] Retry response was: {retry_response[:200]}...")
-                break  # Exit loop on parsing error
+                    # Don't break - continue to try generating more queries
+                    # Only break if we've exhausted attempts or hit max
+                    if total_attempts >= max_attempts:
+                        break
+                    continue
         
         # Final check
         if not target_found and total_attempts >= max_attempts:
