@@ -56,6 +56,12 @@ def parse_args():
         default=10,
         help="Number of top results to retrieve"
     )
+    parser.add_argument(
+        "--max_attempts",
+        type=int,
+        default=20,
+        help="Maximum number of query attempts (initial + retry queries)"
+    )
     return parser.parse_args()
 
 
@@ -164,6 +170,158 @@ Return **only** a single JSON object:
 }}
 """
 
+def create_query_generation_retry_prompt(priors, article, starting_query, target, queries_tried, query_to_sources):
+    """
+    Create a gap-based retry prompt that learns from failed queries.
+    
+    Args:
+        priors: Prior sources
+        article: Article text
+        starting_query: Original starting query
+        target: Target source dict
+        queries_tried: List of queries that were tried and failed
+        query_to_sources: Dictionary mapping queries to their full retrieved source dictionaries
+    """
+    queries_tried_str = "\n".join([f"- '{q}'" for q in queries_tried])
+    
+    # Format all retrieved sources for each query
+    retrieved_sources_str = ""
+    for i, query in enumerate(queries_tried, 1):
+        retrieved_sources = query_to_sources.get(query, [])
+        sources_json = json.dumps(retrieved_sources, indent=2, ensure_ascii=False)
+        retrieved_sources_str += f"\n\nQuery {i}: '{query}'\nRetrieved sources (full dictionaries):\n{sources_json}"
+    
+    return f"""
+You are assisting a journalist in constructing *next-step* search queries to find a specific target source
+from a large corpus of embedded news articles (vector database).
+
+**CRITICAL: Previous queries did NOT successfully retrieve the Target Source.**
+
+---
+
+## Previous Attempts (Failed)
+
+The following queries were tried but did not retrieve the Target Source:
+
+{queries_tried_str}
+
+**What was retrieved instead (full source dictionaries):**
+{retrieved_sources_str}
+
+**Key insight:** The queries above retrieved sources that are NOT the target. Use this information to generate queries that are different and more likely to succeed.
+
+---
+
+## Multi-Stage Reasoning Process (Revised)
+
+### Stage 1 — Re-identify Information Gaps (Learning from Failures)
+
+Read the article and the list of prior sources. **Importantly, consider what gaps the failed queries were trying to address and why they didn't work.**
+
+List **3–5 information needs** that are still unresolved. **Focus on gaps that:**
+- Were NOT successfully addressed by the failed queries
+- Require a different approach than what was tried
+- Might need a different angle, specificity level, or keyword choice
+
+Each gap must:
+- Be grounded in the article (point to the sentence/paragraph that creates the need).
+- NOT be fully covered by any of the **Prior Sources** (same topic/domain).
+- Be phrased as a natural information-seeking question.
+- **Be different from the gaps that the failed queries addressed.**
+
+Format each gap like:
+- "What ... ? (motivated by: <short quote or sentence from article>)"
+
+---
+
+### Stage 1.5 — Align With Target Source (Learning What to Avoid)
+
+You now see the **Target Source (summary only)**.
+
+First, **generalize** the target to its purpose (e.g. "official agency statement on layoffs", "detailed background on the policy", "police incident report").
+
+**Then analyze why previous queries failed:**
+1. What kind of sources did the failed queries retrieve? (e.g., news articles, different outlets, different document types)
+2. How do those retrieved sources differ from the Target Source?
+3. What should the new queries do differently to avoid retrieving the same wrong sources?
+
+Then:
+1. Decide which of the Stage 1 gaps this kind of source would actually help to fill.
+2. For each selected gap, explain in 1–2 sentences how the article uses a source like this.
+3. **Explain how your approach differs from the failed queries.**
+
+---
+
+### Stage 2 — Generate NEW Search Queries (Learning from Mistakes)
+
+For **each** gap that the Target Source could fill, generate **one realistic journalist-style search query** (≤ 15 words) that:
+
+**MUST be different from failed queries:**
+- Use different keywords or phrasing
+- Try a different angle or specificity level
+- Focus on different aspects of the gap
+- Avoid approaches that retrieved wrong sources
+
+**Still maintain constraints:**
+- Be specific enough to plausibly surface a source like the target.
+- Do **not** hard-code the exact target or outlet.
+- Do not include more than 3 specificity anchors.
+
+**You may use:**
+- Proper nouns, entities, places, and dates from the **Article Context**.
+- Document-type hints (e.g., "press release", "police report", "statement").
+
+**You must not use:**
+- Exact outlet names or domains from **Prior Sources**.
+- Exact target source wording from the summary.
+- **Similar phrasing or keywords to the failed queries above.**
+
+---
+
+## Input Information
+
+- **Starting Query:** {starting_query}
+- **Article Context:** {article}
+- **Prior Sources (title, domain, brief topic):** {priors}
+- **Target Source (summary only):** {target}
+- **Failed Queries:** {queries_tried_str}
+
+---
+
+## Output Format
+
+Return **only** a single JSON object:
+
+{{
+  "analysis": {{
+    "why_previous_failed": "Brief analysis of why the previous queries didn't retrieve the target",
+    "what_to_avoid": "What kind of sources/approaches to avoid based on what was retrieved"
+  }},
+  "information_gaps": [
+    {{
+      "gap": "What did city officials say about the closure?",
+      "motivated_by": "City officials announced... but no statement is quoted.",
+      "how_different": "This gap focuses on X, whereas failed queries focused on Y"
+    }}
+  ],
+  "filled_gaps": [
+    {{
+      "gap": "What did city officials say about the closure?",
+      "how_used_in_article": "Article uses the source to quote the city's justification and timing of the closure.",
+      "why_this_will_work": "This approach differs from failed queries by..."
+    }}
+  ],
+  "queries": [
+    {{
+      "gap": "What did city officials say about the closure?",
+      "reasoning": "The target appears to be an official statement. Previous queries retrieved news articles, so this query focuses on official statements rather than news coverage.",
+      "how_different": "Uses 'official statement' instead of 'news about' to avoid retrieving news articles",
+      "query": "official statement city officials closure reasons"
+    }}
+  ]
+}}
+"""
+
 def llm_as_judge_prompt():
     return 
     
@@ -259,9 +417,8 @@ def extract_response(response, model_name):
 
 
 def get_retrieved_sources(retrieval_results):
-    """Extract source names from retrieval results"""
+    """Extract full source dictionaries from retrieval results"""
     retrieved_sources = []
-    
     
     if retrieval_results:
         first_metadata = retrieval_results[0].get('metadata', {})
@@ -269,15 +426,36 @@ def get_retrieved_sources(retrieval_results):
         print(f"[DEBUG] First result metadata keys: {list(first_metadata.keys())}")
         print(f"[DEBUG] First result source keys: {list(first_source.keys())}")
         print(f"[DEBUG] First result source: {first_source}")
-        #print(f"[DEBUG] First result full metadata: {first_metadata}")
-    
-    
 
     for doc_result in retrieval_results:
         metadata = doc_result.get('metadata', {})
-        retrieved_sources.append(metadata)
+        source = metadata.get('source', {})
+        retrieved_sources.append(source)
+    
+    # Print source names for debugging
+    source_names = [s.get('Name', '') for s in retrieved_sources]
+    print(f"[DEBUG] Retrieved source names: {source_names}")
     
     return retrieved_sources
+
+
+def get_all_retrieved_sources(queries_tried, all_retrieval_results):
+    """
+    Get all full source dictionaries retrieved from failed queries.
+    
+    Args:
+        queries_tried: List of query strings
+        all_retrieval_results: List of retrieval_result lists (one per query)
+    
+    Returns:
+        Dictionary mapping queries to their full retrieved source dictionaries
+    """
+    query_to_sources = {}
+    for query, retrieval_result in zip(queries_tried, all_retrieval_results):
+        retrieved_sources = get_retrieved_sources(retrieval_result)
+        query_to_sources[query] = retrieved_sources
+    
+    return query_to_sources
 
 
 def main():
@@ -328,7 +506,6 @@ def main():
         #print(f"Priors: {priors}")
         target = datapoint['target_source']
         #print(f"Target: {target}")
-        target_source_name = datapoint['target_source']['Name']
 
         print("[DEBUG] sending prompt to qwen")
         query_generation_prompt = create_query_generation_prompt(priors, article, starting_query, target)
@@ -360,10 +537,24 @@ def main():
         # Initialize searcher
         news_searcher = Searcher(index_name=args.index_name, model_name=args.model_name)
 
+        queries_tried = []
+        all_retrieval_results = []  # Store retrieval results from failed queries
+        target_found = False
+        rank = None
+        total_attempts = 0
+        max_attempts = args.max_attempts
+
         # Call retriever for each query
         for query_dict in queries_only:
+            # Check if we've reached max attempts
+            if total_attempts >= max_attempts:
+                print(f"[DEBUG] ⚠️ Reached maximum attempts limit ({max_attempts}). Stopping.")
+                break
+                
             query = query_dict['query']
-            print(f"[DEBUG] Searching with query: {query}")
+            print(f"[DEBUG] Searching with query: {query} (Attempt {total_attempts + 1}/{max_attempts})")
+            queries_tried.append(query)
+            total_attempts += 1
             
             # Retrieve
             document_list = news_searcher.search(query=query, k=args.k)
@@ -372,19 +563,108 @@ def main():
                 one_doc = {'page_content': doc.page_content, 'metadata': doc.metadata}
                 retrieval_result.append(one_doc)
             
-            # Get and print source names
-            source_names = get_retrieved_sources(retrieval_result)
+            # Store retrieval result for retry analysis
+            all_retrieval_results.append(retrieval_result)
+            
+            # Get retrieved sources (full source dictionaries)
+            retrieved_sources = get_retrieved_sources(retrieval_result)
 
-            #check if target source is in the retrieval result
-            """
-            for source_name in source_names:
-                if source_name == target_source_name:
-                    print(f"[DEBUG] Target source found in retrieval result")
+            # Check if target source is in the retrieval result
+            for i, retrieved_source in enumerate(retrieved_sources, start=1):
+                # Compare full dictionaries
+                if retrieved_source == target:
+                    target_found = True
+                    rank = i
+                    print(f"[DEBUG] ✅ Target source found at rank {rank}!")
                     break
+            
+            if target_found:
+                break
+
+        # If target not found and haven't reached max attempts, generate retry queries
+        if not target_found and queries_tried and total_attempts < max_attempts:
+            remaining_attempts = max_attempts - total_attempts
+            print(f"[DEBUG] ❌ Target source not found after {len(queries_tried)} queries. Generating retry queries... ({remaining_attempts} attempts remaining)")
+            
+            # Get all retrieved sources from failed queries
+            query_to_sources = get_all_retrieved_sources(queries_tried, all_retrieval_results)
+            
+            # Generate retry prompt
+            retry_prompt = create_query_generation_retry_prompt(
+                priors, article, starting_query, target, queries_tried, query_to_sources
+            )
+            
+            # Call LLM to generate new queries
+            print("[DEBUG] Generating retry queries with LLM...")
+            messages = [{"role": "user", "content": retry_prompt}]
+            text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            inputs = tokenizer(text, return_tensors="pt").to(model.device)
+
+            with torch.no_grad():
+                retry_outputs = model.generate(**inputs, max_new_tokens=512, temperature=0.7)
+
+            retry_response = tokenizer.decode(retry_outputs[0], skip_special_tokens=False)
+            retry_response = extract_response(retry_response, llm_model_name)
+            
+            print("\n[DEBUG] Retry Response:")
+            print(retry_response)
+            
+            # Parse retry response
+            try:
+                retry_parsed = json.loads(retry_response)
+                retry_queries = retry_parsed.get('queries', [])
+                
+                if retry_queries:
+                    print(f"[DEBUG] Generated {len(retry_queries)} retry queries. Trying them now...")
+                    
+                    # Try retry queries (up to remaining attempts)
+                    for retry_query_dict in retry_queries:
+                        # Check if we've reached max attempts
+                        if total_attempts >= max_attempts:
+                            print(f"[DEBUG] Reached maximum attempts limit ({max_attempts}). Stopping.")
+                            break
+                            
+                        retry_query = retry_query_dict.get('query', '')
+                        if not retry_query:
+                            continue
+                            
+                        print(f"[DEBUG] Searching with retry query: {retry_query} (Attempt {total_attempts + 1}/{max_attempts})")
+                        total_attempts += 1
+                        
+                        # Retrieve
+                        document_list = news_searcher.search(query=retry_query, k=args.k)
+                        retrieval_result = []
+                        for doc in document_list:
+                            one_doc = {'page_content': doc.page_content, 'metadata': doc.metadata}
+                            retrieval_result.append(one_doc)
+                        
+                        # Get retrieved sources
+                        retrieved_sources = get_retrieved_sources(retrieval_result)
+
+                        # Check if target source is in the retrieval result
+                        for i, retrieved_source in enumerate(retrieved_sources, start=1):
+                            if retrieved_source == target:
+                                target_found = True
+                                rank = i
+                                print(f"[DEBUG] Target source found at rank {rank} with retry query!")
+                                break
+                        
+                        if target_found:
+                            break
+                    
+                    if not target_found:
+                        if total_attempts >= max_attempts:
+                            print(f"[DEBUG] Target source not found after {total_attempts} attempts (max limit reached)")
+                        else:
+                            print(f"[DEBUG]  Target source still not found after retry queries")
                 else:
-                    print(f"[DEBUG] Target source not found in retrieval result")
-                    break
-            """
+                    print("[DEBUG]  No retry queries generated from LLM response")
+            except json.JSONDecodeError as e:
+                print(f"[DEBUG]  Could not parse retry response as JSON: {e}")
+                print(f"[DEBUG] Retry response was: {retry_response[:200]}...")
+        elif not target_found and total_attempts >= max_attempts:
+            print(f"[DEBUG]  Target source not found after {total_attempts} attempts (max limit: {max_attempts})")
+        
         
 
 
