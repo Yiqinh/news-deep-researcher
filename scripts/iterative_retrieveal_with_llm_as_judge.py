@@ -134,7 +134,7 @@ Each query must:
 
 ---
 
-## 🧾 Output Format
+## Output Format
 Return **only** a single JSON object:
 
 {{
@@ -245,19 +245,15 @@ def extract_response(response, model_name):
     Extract the assistant's response from the full generated text.
     Handles Qwen model formats.
     """
-    # Qwen format - extract after assistant tag
     if "assistant\n" in response:
         response = response.split("assistant\n")[-1].strip()
-    # Qwen format with special tokens
     elif "<|im_end|>" in response:
         parts = response.split("<|im_end|>")
         if len(parts) > 1:
             response = parts[-2].strip() if parts[-1].strip() == "" else parts[-1].strip()
-    # Generic fallback for other formats
     elif "<|start_header_id|>assistant<|end_header_id|>" in response:
         response = response.split("<|start_header_id|>assistant<|end_header_id|>")[-1].strip()
     
-    # Remove any remaining special tokens
     response = response.replace("<|im_start|>", "").replace("<|im_end|>", "").strip()
     return response
 
@@ -274,15 +270,16 @@ def main():
         return
     with open(combined_dataset_path, 'r', encoding='utf-8') as f:
         combined_dataset = json.load(f)
-    print(f"Loaded {len(combined_dataset)} datapoints from combined dataset")
+    print(f"[DEBUG] Loaded {len(combined_dataset)} datapoints from combined dataset")
 
-    """
+    
     # Load LLM model
-    print(f"\nLoading LLM model: {llm_model_name}...")
+    print(f"[DEBUG] Loading LLM model: {llm_model_name}...")
     tokenizer = AutoTokenizer.from_pretrained(llm_model_name, trust_remote_code=True)
     
     # Check if CUDA is available, otherwise use CPU with appropriate dtype
     if torch.cuda.is_available():
+        print("[DEBUG] CUDA is available")
         model = AutoModelForCausalLM.from_pretrained(
             llm_model_name,
             torch_dtype=torch.bfloat16,
@@ -297,7 +294,7 @@ def main():
             trust_remote_code=True
         )
         model = model.to("cpu")
-    print("Model loaded successfully!")
+    print("[DEBUG] Model loaded successfully!")
 
     for datapoint in combined_dataset[:1]:
         
@@ -310,7 +307,7 @@ def main():
         target = datapoint['target_source']
         #print(f"Target: {target}")
 
-        print("sending prompt to quen")
+        print("[DEBUG] sending prompt to quen")
         query_generation_prompt = create_query_generation_prompt(priors, article, starting_query, target)
         messages = [{"role": "user", "content": query_generation_prompt}]
         text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
@@ -326,21 +323,16 @@ def main():
         response_file_path = os.path.join(proj_root, 'results', 'qwen_test_response.jsonl')
         os.makedirs(os.path.dirname(response_file_path), exist_ok=True)
         
-        # Save as text file (response is a string)
+        # Save as text file
         with open(response_file_path, 'w', encoding='utf-8') as f:
             f.write(response)
         
-        print("\n=== Qwen Response ===")
+        print("\n Qwen Response")
         print(response)
         print(f"\nResponse saved to: {response_file_path}")
 
     
-    #prep starting query prompt 
-    #parse through respononses and append to query list 
-    #run retrieval and see if query retrieves target source 
-    #if it did not retrieve target source, generate new query and repeat 
-    #save query list and query that worked to results
-"""
+
 
 
 if __name__ == "__main__":
