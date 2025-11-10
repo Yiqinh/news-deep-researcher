@@ -277,6 +277,7 @@ def get_source_names(retrieval_results):
         metadata = doc_result.get('metadata', {})
         source = metadata.get('source', {})
         source_name = source.get('Name', '')  #
+        source_names.append(source_name)
     
     # Print once after building the list
     print(f"[DEBUG] Retrieved source names: {source_names}")
@@ -331,6 +332,7 @@ def main():
         #print(f"Priors: {priors}")
         target = datapoint['target_source']
         #print(f"Target: {target}")
+        target_source_name = datapoint['target_source']['Name']
 
         print("[DEBUG] sending prompt to qwen")
         query_generation_prompt = create_query_generation_prompt(priors, article, starting_query, target)
@@ -376,6 +378,15 @@ def main():
             
             # Get and print source names
             source_names = get_source_names(retrieval_result)
+
+            #check if target source is in the retrieval result
+            for source_name in source_names:
+                if source_name == target_source_name:
+                    print(f"[DEBUG] Target source found in retrieval result")
+                    break
+                else:
+                    print(f"[DEBUG] Target source not found in retrieval result")
+                    break
 
 
 
