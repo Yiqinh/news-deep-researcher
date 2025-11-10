@@ -258,6 +258,20 @@ def extract_response(response, model_name):
     return response
 
 
+def get_source_names(retrieval_results):
+    """Extract source names from retrieval results"""
+    source_names = []
+    for doc_result in retrieval_results:
+        metadata = doc_result.get('metadata', {})
+        source = metadata.get('source', {})
+        source_name = source.get('Name', '')  # Adjust field name if different
+        source_names.append(source_name)
+    
+    # Print once after building the list
+    print(f"[DEBUG] Retrieved source names: {source_names}")
+    return source_names
+
+
 def main():
     # Parse arguments
     args = parse_args()
@@ -307,7 +321,7 @@ def main():
         target = datapoint['target_source']
         #print(f"Target: {target}")
 
-        print("[DEBUG] sending prompt to quen")
+        print("[DEBUG] sending prompt to qwen")
         query_generation_prompt = create_query_generation_prompt(priors, article, starting_query, target)
         messages = [{"role": "user", "content": query_generation_prompt}]
         text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
@@ -333,18 +347,24 @@ def main():
 
 
         queries_only = parse_response(priors, article, starting_query, target, response)
-        query_list = [q['query'] for q in queries_only]
 
-        #call retriever
-        for q in query_list:
-            document_list = news_searcher.search(query=q, k=k)
+        # Initialize searcher
+        news_searcher = Searcher(index_name=args.index_name, model_name=args.model_name)
+
+        # Call retriever for each query
+        for query_dict in queries_only:
+            query = query_dict['query']
+            print(f"[DEBUG] Searching with query: {query}")
+            
+            # Retrieve
+            document_list = news_searcher.search(query=query, k=args.k)
             retrieval_result = []
             for doc in document_list:
                 one_doc = {'page_content': doc.page_content, 'metadata': doc.metadata}
                 retrieval_result.append(one_doc)
-                print (f"[DEBUG] Retrieval result: {doc.metadata}")
-
-            #queries_only[q]['retrieval'] = retrieval_result
+            
+            # Get and print source names
+            source_names = get_source_names(retrieval_result)
 
 
 
