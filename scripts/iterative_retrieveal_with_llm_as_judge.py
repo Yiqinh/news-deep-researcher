@@ -723,62 +723,62 @@ def main():
                 retry_queries = retry_parsed.get('queries', [])
             
             if retry_queries:
-                    print(f"[DEBUG] Generated {len(retry_queries)} retry queries. Trying them now...")
-                    
-                    # Try retry queries (up to remaining attempts)
-                    for retry_query_dict in retry_queries:
-                        # Check if we've reached max attempts
-                        if total_attempts >= max_attempts:
-                            print(f"[DEBUG] Reached maximum attempts limit ({max_attempts}). Stopping.")
-                            break
-                            
-                        retry_query = retry_query_dict.get('query', '')
-                        if not retry_query:
-                            continue
-                            
-                        print(f"[DEBUG] Searching with retry query: {retry_query} (Attempt {total_attempts + 1}/{max_attempts})")
-                        queries_tried.append(retry_query)  # Add to queries_tried for next retry generation
-                        total_attempts += 1
-                        
-                        # Retrieve
-                        document_list = news_searcher.search(query=retry_query, k=args.k)
-                        retrieval_result = []
-                        for doc in document_list:
-                            one_doc = {'page_content': doc.page_content, 'metadata': doc.metadata}
-                            retrieval_result.append(one_doc)
-                        
-                        # Store retrieval result for next retry analysis
-                        all_retrieval_results.append(retrieval_result)
-                        
-                        # Get retrieved sources
-                        retrieved_sources = get_retrieved_sources(retrieval_result)
-
-                        # Check if target source is in the retrieval result
-                        for i, retrieved_source in enumerate(retrieved_sources, start=1):
-                            if retrieved_source == target:
-                                target_found = True
-                                rank = i
-                                print(f"[DEBUG] Target source found at rank {rank} with retry query!")
-                                break
-                        
-                        if target_found:
-                            break
-                    
-                    # Continue the while loop to generate more retry queries if target not found
-                    if not target_found:
-                        if total_attempts >= max_attempts:
-                            print(f"[DEBUG] Target source not found after {total_attempts} attempts (max limit reached)")
-                        else:
-                            print(f"[DEBUG] Target source still not found after retry queries. Generating new retry queries...")
-                        # Continue the while loop
-                        continue
-                else:
-                    print("[DEBUG] No retry queries generated from LLM response")
-                    # Don't break - continue to try generating more queries
-                    # Only break if we've exhausted attempts or hit max
+                print(f"[DEBUG] Generated {len(retry_queries)} retry queries. Trying them now...")
+                
+                # Try retry queries (up to remaining attempts)
+                for retry_query_dict in retry_queries:
+                    # Check if we've reached max attempts
                     if total_attempts >= max_attempts:
+                        print(f"[DEBUG] Reached maximum attempts limit ({max_attempts}). Stopping.")
                         break
+                        
+                    retry_query = retry_query_dict.get('query', '')
+                    if not retry_query:
+                        continue
+                        
+                    print(f"[DEBUG] Searching with retry query: {retry_query} (Attempt {total_attempts + 1}/{max_attempts})")
+                    queries_tried.append(retry_query)  # Add to queries_tried for next retry generation
+                    total_attempts += 1
+                    
+                    # Retrieve
+                    document_list = news_searcher.search(query=retry_query, k=args.k)
+                    retrieval_result = []
+                    for doc in document_list:
+                        one_doc = {'page_content': doc.page_content, 'metadata': doc.metadata}
+                        retrieval_result.append(one_doc)
+                    
+                    # Store retrieval result for next retry analysis
+                    all_retrieval_results.append(retrieval_result)
+                    
+                    # Get retrieved sources
+                    retrieved_sources = get_retrieved_sources(retrieval_result)
+
+                    # Check if target source is in the retrieval result
+                    for i, retrieved_source in enumerate(retrieved_sources, start=1):
+                        if retrieved_source == target:
+                            target_found = True
+                            rank = i
+                            print(f"[DEBUG] Target source found at rank {rank} with retry query!")
+                            break
+                    
+                    if target_found:
+                        break
+                
+                # Continue the while loop to generate more retry queries if target not found
+                if not target_found:
+                    if total_attempts >= max_attempts:
+                        print(f"[DEBUG] Target source not found after {total_attempts} attempts (max limit reached)")
+                    else:
+                        print(f"[DEBUG] Target source still not found after retry queries. Generating new retry queries...")
+                    # Continue the while loop
                     continue
+            else:
+                print("[DEBUG] No retry queries generated from LLM response")
+                # Don't break - continue to try generating more queries
+                # Only break if we've exhausted attempts or hit max
+                if total_attempts >= max_attempts:
+                    break
+                continue
         
         # Final check
         if not target_found and total_attempts >= max_attempts:
