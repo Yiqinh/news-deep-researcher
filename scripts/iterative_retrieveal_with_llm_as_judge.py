@@ -28,7 +28,7 @@ def parse_args():
     parser.add_argument(
         "--llm_model_name",
         type=str,
-        default="Qwen/Qwen2.5-72B-Instruct",
+        default="Qwen/Qwen2.5-32B-Instruct",
         help="Name or path of the Qwen LLM model to use for reasoning (e.g., Qwen/Qwen2.5-1.5B-Instruct, Qwen/Qwen2.5-3B-Instruct for CPU, Qwen/Qwen2.5-7B-Instruct for GPU)"
     )
     
