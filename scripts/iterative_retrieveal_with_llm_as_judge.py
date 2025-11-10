@@ -262,6 +262,7 @@ def get_source_names(retrieval_results):
     """Extract source names from retrieval results"""
     source_names = []
     
+    """
     if retrieval_results:
         first_metadata = retrieval_results[0].get('metadata', {})
         first_source = first_metadata.get('source', {})
@@ -271,6 +272,7 @@ def get_source_names(retrieval_results):
         #print(f"[DEBUG] First result full metadata: {first_metadata}")
     
     """
+
     for doc_result in retrieval_results:
         metadata = doc_result.get('metadata', {})
         source = metadata.get('source', {})
@@ -279,8 +281,6 @@ def get_source_names(retrieval_results):
     # Print once after building the list
     print(f"[DEBUG] Retrieved source names: {source_names}")
     return source_names
-    """
-    return None
 
 
 def main():
