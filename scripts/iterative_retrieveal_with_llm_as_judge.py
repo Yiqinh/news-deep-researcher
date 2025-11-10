@@ -22,7 +22,7 @@ def parse_args():
     parser.add_argument(
         "--model_name",
         type=str,
-        default="Qwen/Qwen3-Embedding-8B",
+        default="Qwen/Qwen2.5-3B-Instruct",
         help="Name or path of the embedding model to use"
     )
     parser.add_argument(
