@@ -373,7 +373,7 @@ def main():
                 retrieval_result.append(one_doc)
             
             # Get and print source names
-            source_names = get_source_names(retrieval_result)
+            source_names = get_retrieved_sources(retrieval_result)
 
             #check if target source is in the retrieval result
             """
