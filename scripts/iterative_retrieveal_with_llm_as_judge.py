@@ -582,9 +582,10 @@ def main():
                 break
 
         # If target not found and haven't reached max attempts, generate retry queries
-        if not target_found and queries_tried and total_attempts < max_attempts:
+        # Keep generating retry queries until target found or max attempts reached
+        while not target_found and queries_tried and total_attempts < max_attempts:
             remaining_attempts = max_attempts - total_attempts
-            print(f"[DEBUG] ❌ Target source not found after {len(queries_tried)} queries. Generating retry queries... ({remaining_attempts} attempts remaining)")
+            print(f"[DEBUG] Target source not found after {len(queries_tried)} queries. Generating retry queries... ({remaining_attempts} attempts remaining)")
             
             # Get all retrieved sources from failed queries
             query_to_sources = get_all_retrieved_sources(queries_tried, all_retrieval_results)
@@ -629,6 +630,7 @@ def main():
                             continue
                             
                         print(f"[DEBUG] Searching with retry query: {retry_query} (Attempt {total_attempts + 1}/{max_attempts})")
+                        queries_tried.append(retry_query)  # Add to queries_tried for next retry generation
                         total_attempts += 1
                         
                         # Retrieve
@@ -637,6 +639,9 @@ def main():
                         for doc in document_list:
                             one_doc = {'page_content': doc.page_content, 'metadata': doc.metadata}
                             retrieval_result.append(one_doc)
+                        
+                        # Store retrieval result for next retry analysis
+                        all_retrieval_results.append(retrieval_result)
                         
                         # Get retrieved sources
                         retrieved_sources = get_retrieved_sources(retrieval_result)
@@ -652,18 +657,25 @@ def main():
                         if target_found:
                             break
                     
+                    # Continue the while loop to generate more retry queries if target not found
                     if not target_found:
                         if total_attempts >= max_attempts:
                             print(f"[DEBUG] Target source not found after {total_attempts} attempts (max limit reached)")
                         else:
-                            print(f"[DEBUG]  Target source still not found after retry queries")
+                            print(f"[DEBUG] Target source still not found after retry queries. Generating new retry queries...")
+                        # Continue the while loop
+                        continue
                 else:
-                    print("[DEBUG]  No retry queries generated from LLM response")
+                    print("[DEBUG] No retry queries generated from LLM response")
+                    break  # Exit loop if no queries generated
             except json.JSONDecodeError as e:
-                print(f"[DEBUG]  Could not parse retry response as JSON: {e}")
+                print(f"[DEBUG] Could not parse retry response as JSON: {e}")
                 print(f"[DEBUG] Retry response was: {retry_response[:200]}...")
-        elif not target_found and total_attempts >= max_attempts:
-            print(f"[DEBUG]  Target source not found after {total_attempts} attempts (max limit: {max_attempts})")
+                break  # Exit loop on parsing error
+        
+        # Final check
+        if not target_found and total_attempts >= max_attempts:
+            print(f"[DEBUG] Target source not found after {total_attempts} attempts (max limit: {max_attempts})")
         
         
 
