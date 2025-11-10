@@ -258,11 +258,11 @@ def extract_response(response, model_name):
     return response
 
 
-def get_source_names(retrieval_results):
+def get_retrieved_sources(retrieval_results):
     """Extract source names from retrieval results"""
-    source_names = []
+    retrieved_sources = []
     
-    """
+    
     if retrieval_results:
         first_metadata = retrieval_results[0].get('metadata', {})
         first_source = first_metadata.get('source', {})
@@ -271,17 +271,13 @@ def get_source_names(retrieval_results):
         print(f"[DEBUG] First result source: {first_source}")
         #print(f"[DEBUG] First result full metadata: {first_metadata}")
     
-    """
+    
 
     for doc_result in retrieval_results:
         metadata = doc_result.get('metadata', {})
-        source = metadata.get('source', {})
-        source_name = source.get('Name', '')  #
-        source_names.append(source_name)
+        retrieved_sources.append(metadata)
     
-    # Print once after building the list
-    print(f"[DEBUG] Retrieved source names: {source_names}")
-    return source_names
+    return retrieved_sources
 
 
 def main():
@@ -380,6 +376,7 @@ def main():
             source_names = get_source_names(retrieval_result)
 
             #check if target source is in the retrieval result
+            """
             for source_name in source_names:
                 if source_name == target_source_name:
                     print(f"[DEBUG] Target source found in retrieval result")
@@ -387,6 +384,8 @@ def main():
                 else:
                     print(f"[DEBUG] Target source not found in retrieval result")
                     break
+            """
+        
 
 
 
