@@ -725,7 +725,7 @@ def main():
                             
                         retry_query = retry_query_dict.get('query', '')
                         if not retry_query:
-                continue
+                            continue
                             
                         print(f"[DEBUG] Searching with retry query: {retry_query} (Attempt {total_attempts + 1}/{max_attempts})")
                         queries_tried.append(retry_query)  # Add to queries_tried for next retry generation
