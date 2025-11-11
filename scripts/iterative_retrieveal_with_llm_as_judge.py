@@ -593,9 +593,13 @@ def main():
         try:
             article = datapoint['article']['article_text']
             #print(f"Article: {article}")
-            starting_query = datapoint['starting_query']['model_output']
+            # Handle different starting_query structures
+            if isinstance(datapoint.get('starting_query'), dict):
+                starting_query = datapoint['starting_query'].get('model_output', datapoint['starting_query'].get('query', ''))
+            else:
+                starting_query = str(datapoint.get('starting_query', ''))
             #print(f"Starting query: {starting_query}")
-            priors = datapoint['prior_sources']
+            priors = datapoint.get('prior_sources', [])
             #print(f"Priors: {priors}")
             target = datapoint['target_source']
             #print(f"Target: {target}")
@@ -620,13 +624,17 @@ def main():
             with open(response_file_path, 'a', encoding='utf-8') as f:
                 f.write(f"\n--- Datapoint {idx} ---\n")
                 f.write(response)
+                f.write("\n")
             
-            print("\n Qwen Response")
-            print(response)
+            print("\n Qwen Response (first 500 chars):")
+            print(response[:500] + "..." if len(response) > 500 else response)
             print(f"\nResponse saved to: {response_file_path}")
-
+            print(f"[DEBUG] Response length: {len(response)} characters")
 
             queries_only = parse_response(priors, article, starting_query, target, response)
+            
+            if not queries_only:
+                print(f"[WARNING] No queries extracted from response. Response preview: {response[:200]}...")
 
             queries_tried = []
             all_retrieval_results = []  
