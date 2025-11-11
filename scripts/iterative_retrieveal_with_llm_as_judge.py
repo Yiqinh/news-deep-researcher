@@ -60,7 +60,7 @@ def parse_args():
     parser.add_argument(
         "--max_attempts",
         type=int,
-        default=200,
+        default=20,
         help="Maximum number of query attempts (initial + retry queries)"
     )
     return parser.parse_args()
@@ -200,7 +200,8 @@ The following queries were tried but did not retrieve the Target Source:
 **What was retrieved instead (full source dictionaries):**
 {retrieved_sources_str}
 
-**Key insight:** The queries above retrieved sources that are NOT the target. Use this information to generate queries that are different and more likely to succeed.
+**Key insight:** The queries above retrieved sources that are NOT the target. Use this information to generate queries that are different and more likely to succeed. The new queries must differ significantly from all previously failed queries.
+They should explore alternative angles, stakeholders, mechanisms, document types, etc — not merely rephrase the same concept. If a new query is only a rewording of an old one, discard it and generate a more distinct alternative.
 
 ---
 
@@ -377,7 +378,6 @@ def call_llm(prompt, model_name="Qwen/Qwen2.5-3B-Instruct"):
     with torch.no_grad():
         outputs = model.generate(
             **inputs,
-            max_new_tokens=512,
             temperature=0.7,
             do_sample=True
         )
@@ -580,205 +580,243 @@ def main():
 
     # Collect enhanced datapoints
     enhanced_dataset = []
+    # Collect simplified datapoints (just the key fields)
+    simplified_dataset = []
 
-    for datapoint in combined_dataset[:1]:
+    news_searcher = Searcher(index_name=args.index_name, model_name=args.model_name)
+
+    for idx, datapoint in enumerate(combined_dataset[:10], 1):
+        print(f"\n{'='*60}")
+        print(f"[DEBUG] Processing datapoint {idx}/10")
+        print(f"{'='*60}\n")
         
-        article = datapoint['article']['article_text']
-        #print(f"Article: {article}")
-        starting_query = datapoint['starting_query']['model_output']
-        #print(f"Starting query: {starting_query}")
-        priors = datapoint['prior_sources']
-        #print(f"Priors: {priors}")
-        target = datapoint['target_source']
-        #print(f"Target: {target}")
+        try:
+            article = datapoint['article']['article_text']
+            #print(f"Article: {article}")
+            starting_query = datapoint['starting_query']['model_output']
+            #print(f"Starting query: {starting_query}")
+            priors = datapoint['prior_sources']
+            #print(f"Priors: {priors}")
+            target = datapoint['target_source']
+            #print(f"Target: {target}")
 
-        print("[DEBUG] sending prompt to qwen")
-        query_generation_prompt = create_query_generation_prompt(priors, article, starting_query, target)
-        messages = [{"role": "user", "content": query_generation_prompt}]
-        text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-        inputs = tokenizer(text, return_tensors="pt").to(model.device)
-
-        with torch.no_grad():
-            outputs = model.generate(**inputs, max_new_tokens=512, temperature=0.7)
-
-        response = tokenizer.decode(outputs[0], skip_special_tokens=False)
-        response = extract_response(response, llm_model_name)
-
-        # Save response to file
-        response_file_path = os.path.join(proj_root, 'results', 'qwen_test_response.jsonl')
-        os.makedirs(os.path.dirname(response_file_path), exist_ok=True)
-        
-        # Save as text file
-        with open(response_file_path, 'w', encoding='utf-8') as f:
-            f.write(response)
-        
-        print("\n Qwen Response")
-        print(response)
-        print(f"\nResponse saved to: {response_file_path}")
-
-
-        queries_only = parse_response(priors, article, starting_query, target, response)
-
-        # Initialize searcher
-        news_searcher = Searcher(index_name=args.index_name, model_name=args.model_name)
-
-        queries_tried = []
-        all_retrieval_results = []  
-        target_found = False
-        rank = None
-        total_attempts = 0
-        max_attempts = args.max_attempts
-        target_query = None  
-        filter_set = None 
-
-        # Call retriever for each query
-        for query_dict in queries_only:
-            # Check if we've reached max attempts
-            if total_attempts >= max_attempts:
-                print(f"[DEBUG]  Reached maximum attempts limit ({max_attempts}). Stopping.")
-                break
-                
-            query = query_dict['query']
-            print(f"[DEBUG] Searching with query: {query} (Attempt {total_attempts + 1}/{max_attempts})")
-            queries_tried.append(query)
-            total_attempts += 1
-            print(f"[DEBUG] Total attempts: {total_attempts}")
-            
-            # Retrieve
-            document_list = news_searcher.search(query=query, k=args.k)
-            retrieval_result = []
-            for doc in document_list:
-                one_doc = {'page_content': doc.page_content, 'metadata': doc.metadata}
-                retrieval_result.append(one_doc)
-            
-            # Store retrieval result for retry analysis
-            all_retrieval_results.append(retrieval_result)
-            
-            # Get retrieved sources (full source dictionaries)
-            retrieved_sources = get_retrieved_sources(retrieval_result)
-
-            # Check if target source is in the retrieval result
-            for i, retrieved_source in enumerate(retrieved_sources, start=1):
-                # Compare full dictionaries
-                if retrieved_source == target:
-                    target_found = True
-                    rank = i
-                    target_query = query  # Store the successful query
-                    filter_set = retrieval_result  # Store the full retrieval result (all k sources)
-                    print(f"[DEBUG] ✅ Target source found at rank {rank}!")
-                    break
-            
-            if target_found:
-                break
-
-        while not target_found and queries_tried and total_attempts < max_attempts:
-            remaining_attempts = max_attempts - total_attempts
-            print(f"[DEBUG] Target source not found after {len(queries_tried)} queries. Generating retry queries... ({remaining_attempts} attempts remaining)")
-            
-            query_to_sources = get_all_retrieved_sources(queries_tried, all_retrieval_results)
-            
-            retry_prompt = create_query_generation_retry_prompt(
-                priors, article, starting_query, target, queries_tried, query_to_sources
-            )
-            
-            # Call LLM to generate new queries
-            print("[DEBUG] Generating retry queries with LLM...")
-            messages = [{"role": "user", "content": retry_prompt}]
+            print("[DEBUG] sending prompt to qwen")
+            query_generation_prompt = create_query_generation_prompt(priors, article, starting_query, target)
+            messages = [{"role": "user", "content": query_generation_prompt}]
             text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
             inputs = tokenizer(text, return_tensors="pt").to(model.device)
 
             with torch.no_grad():
-                retry_outputs = model.generate(**inputs, max_new_tokens=512, temperature=0.7)
+                outputs = model.generate(**inputs, temperature=0.7)
 
-            retry_response = tokenizer.decode(retry_outputs[0], skip_special_tokens=False)
-            retry_response = extract_response(retry_response, llm_model_name)
+            response = tokenizer.decode(outputs[0], skip_special_tokens=False)
+            response = extract_response(response, llm_model_name)
+
+            # Save response to file
+            response_file_path = os.path.join(proj_root, 'results', 'qwen_test_10.jsonl')
+            os.makedirs(os.path.dirname(response_file_path), exist_ok=True)
             
-            print("\n[DEBUG] Retry Response:")
-            print(retry_response)
+            # Save as text file (append mode to save all responses)
+            with open(response_file_path, 'a', encoding='utf-8') as f:
+                f.write(f"\n--- Datapoint {idx} ---\n")
+                f.write(response)
             
-            # Parse retry response
-            retry_parsed = extract_json_from_response(retry_response)
-            
-            if retry_parsed is None:
-                print(f"[DEBUG] Could not extract JSON from retry response")
-                print(f"[DEBUG] Retry response was: {retry_response[:500]}...")
-                # Try to continue with empty queries instead of breaking
-                retry_queries = []
-            else:
-                retry_queries = retry_parsed.get('queries', [])
-            
-            if retry_queries:
-                print(f"[DEBUG] Generated {len(retry_queries)} retry queries. Trying them now...")
+            print("\n Qwen Response")
+            print(response)
+            print(f"\nResponse saved to: {response_file_path}")
+
+
+            queries_only = parse_response(priors, article, starting_query, target, response)
+
+            queries_tried = []
+            all_retrieval_results = []  
+            target_found = False
+            rank = None
+            total_attempts = 0
+            max_attempts = args.max_attempts
+            target_query = None  
+            filter_set = None 
+
+            # Call retriever for each query
+            for query_dict in queries_only:
+                # Check if we've reached max attempts
+                if total_attempts >= max_attempts:
+                    print(f"[DEBUG]  Reached maximum attempts limit ({max_attempts}). Stopping.")
+                    break
+                    
+                query = query_dict['query']
+                print(f"[DEBUG] Searching with query: {query} (Attempt {total_attempts + 1}/{max_attempts})")
+                queries_tried.append(query)
+                total_attempts += 1
+                print(f"[DEBUG] Total attempts: {total_attempts}")
                 
-                # Try retry queries (up to remaining attempts)
-                for retry_query_dict in retry_queries:
-                    # Check if we've reached max attempts
-                    if total_attempts >= max_attempts:
-                        print(f"[DEBUG] Reached maximum attempts limit ({max_attempts}). Stopping.")
-                        break
-                        
-                    retry_query = retry_query_dict.get('query', '')
-                    if not retry_query:
-                        continue
-                        
-                    print(f"[DEBUG] Searching with retry query: {retry_query} (Attempt {total_attempts + 1}/{max_attempts})")
-                    queries_tried.append(retry_query)  # Add to queries_tried for next retry generation
-                    total_attempts += 1
-                    
-                    # Retrieve
-                    document_list = news_searcher.search(query=retry_query, k=args.k)
-                    retrieval_result = []
-                    for doc in document_list:
-                        one_doc = {'page_content': doc.page_content, 'metadata': doc.metadata}
-                        retrieval_result.append(one_doc)
-                    
-                    # Store retrieval result for next retry analysis
-                    all_retrieval_results.append(retrieval_result)
-                    
-                    # Get retrieved sources
-                    retrieved_sources = get_retrieved_sources(retrieval_result)
+                # Retrieve
+                document_list = news_searcher.search(query=query, k=args.k)
+                retrieval_result = []
+                for doc in document_list:
+                    one_doc = {'page_content': doc.page_content, 'metadata': doc.metadata}
+                    retrieval_result.append(one_doc)
+                
+                # Store retrieval result for retry analysis
+                all_retrieval_results.append(retrieval_result)
+                
+                # Get retrieved sources (full source dictionaries)
+                retrieved_sources = get_retrieved_sources(retrieval_result)
 
-                    # Check if target source is in the retrieval result
-                    for i, retrieved_source in enumerate(retrieved_sources, start=1):
-                        if retrieved_source == target:
-                            target_found = True
-                            rank = i
-                            target_query = retry_query  # Store the successful query
-                            filter_set = retrieval_result  # Store the full retrieval result (all k sources)
-                            print(f"[DEBUG] Target source found at rank {rank} with retry query!")
+                # Check if target source is in the retrieval result
+                for i, retrieved_source in enumerate(retrieved_sources, start=1):
+                    # Compare full dictionaries
+                    if retrieved_source == target:
+                        target_found = True
+                        rank = i
+                        target_query = query  # Store the successful query
+                        filter_set = retrieval_result  # Store the full retrieval result (all k sources)
+                        print(f"[DEBUG] ✅ Target source found at rank {rank}!")
+                        break
+                
+                if target_found:
+                    break
+
+            while not target_found and queries_tried and total_attempts < max_attempts:
+                remaining_attempts = max_attempts - total_attempts
+                print(f"[DEBUG] Target source not found after {len(queries_tried)} queries. Generating retry queries... ({remaining_attempts} attempts remaining)")
+                
+                query_to_sources = get_all_retrieved_sources(queries_tried, all_retrieval_results)
+                
+                retry_prompt = create_query_generation_retry_prompt(
+                    priors, article, starting_query, target, queries_tried, query_to_sources
+                )
+                
+                # Call LLM to generate new queries
+                print("[DEBUG] Generating retry queries with LLM...")
+                messages = [{"role": "user", "content": retry_prompt}]
+                text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+                inputs = tokenizer(text, return_tensors="pt").to(model.device)
+
+                with torch.no_grad():
+                    retry_outputs = model.generate(**inputs, temperature=0.7)
+
+                retry_response = tokenizer.decode(retry_outputs[0], skip_special_tokens=False)
+                retry_response = extract_response(retry_response, llm_model_name)
+                
+                print("\n[DEBUG] Retry Response:")
+                print(retry_response)
+                
+                # Parse retry response
+                retry_parsed = extract_json_from_response(retry_response)
+                
+                if retry_parsed is None:
+                    print(f"[DEBUG] Could not extract JSON from retry response")
+                    print(f"[DEBUG] Retry response was: {retry_response[:500]}...")
+                    # Try to continue with empty queries instead of breaking
+                    retry_queries = []
+                else:
+                    retry_queries = retry_parsed.get('queries', [])
+                
+                if retry_queries:
+                    print(f"[DEBUG] Generated {len(retry_queries)} retry queries. Trying them now...")
+                    
+                    # Try retry queries (up to remaining attempts)
+                    for retry_query_dict in retry_queries:
+                        # Check if we've reached max attempts
+                        if total_attempts >= max_attempts:
+                            print(f"[DEBUG] Reached maximum attempts limit ({max_attempts}). Stopping.")
+                            break
+                            
+                        retry_query = retry_query_dict.get('query', '')
+                        if not retry_query:
+                continue
+                            
+                        print(f"[DEBUG] Searching with retry query: {retry_query} (Attempt {total_attempts + 1}/{max_attempts})")
+                        queries_tried.append(retry_query)  # Add to queries_tried for next retry generation
+                        total_attempts += 1
+                        
+                        # Retrieve
+                        document_list = news_searcher.search(query=retry_query, k=args.k)
+            retrieval_result = []
+            for doc in document_list:
+                one_doc = {'page_content': doc.page_content, 'metadata': doc.metadata}
+                retrieval_result.append(one_doc)
+
+                        # Store retrieval result for next retry analysis
+                        all_retrieval_results.append(retrieval_result)
+                        
+                        # Get retrieved sources
+                        retrieved_sources = get_retrieved_sources(retrieval_result)
+
+                        # Check if target source is in the retrieval result
+                        for i, retrieved_source in enumerate(retrieved_sources, start=1):
+                            if retrieved_source == target:
+                                target_found = True
+                                rank = i
+                                target_query = retry_query  # Store the successful query
+                                filter_set = retrieval_result  # Store the full retrieval result (all k sources)
+                                print(f"[DEBUG] Target source found at rank {rank} with retry query!")
+                                break
+                        
+                        if target_found:
                             break
                     
-                    if target_found:
-                        break
-                
-                # Continue the while loop to generate more retry queries if target not found
-                if not target_found:
+                    # Continue the while loop to generate more retry queries if target not found
+                    if not target_found:
+                        if total_attempts >= max_attempts:
+                            print(f"[DEBUG] Target source not found after {total_attempts} attempts (max limit reached)")
+                        else:
+                            print(f"[DEBUG] Target source still not found after retry queries. Generating new retry queries...")
+                        # Continue the while loop
+                        continue
+                else:
+                    print("[DEBUG] No retry queries generated from LLM response")
+                    # Don't break - continue to try generating more queries
+                    # Only break if we've exhausted attempts or hit max
                     if total_attempts >= max_attempts:
-                        print(f"[DEBUG] Target source not found after {total_attempts} attempts (max limit reached)")
-                    else:
-                        print(f"[DEBUG] Target source still not found after retry queries. Generating new retry queries...")
-                    # Continue the while loop
+                        break
                     continue
-            else:
-                print("[DEBUG] No retry queries generated from LLM response")
-                # Don't break - continue to try generating more queries
-                # Only break if we've exhausted attempts or hit max
-                if total_attempts >= max_attempts:
-                    break
-                continue
         
-        # Final check
-        if not target_found and total_attempts >= max_attempts:
-            print(f"[DEBUG] Target source not found after {total_attempts} attempts (max limit: {max_attempts})")
+            # Final check
+            if not target_found and total_attempts >= max_attempts:
+                print(f"[DEBUG] Target source not found after {total_attempts} attempts (max limit: {max_attempts})")
+            
+            # Create enhanced datapoint with new fields
+            enhanced_datapoint = datapoint.copy()
+            enhanced_datapoint['attempted_queries'] = queries_tried
+            enhanced_datapoint['target_query'] = target_query  # None if not found
+            enhanced_datapoint['filter_set'] = filter_set  # None if not found
+            enhanced_dataset.append(enhanced_datapoint)
+            
+            # Create simplified entry with just key fields
+            simplified_entry = {
+                'attempted_queries': queries_tried,
+                'target_query': target_query,  # None if not found
+                'filter_set': filter_set,  # None if not found
+                'number_of_priors': len(priors),
+                'total_attempts': total_attempts
+            }
+            simplified_dataset.append(simplified_entry)
+            
+            print(f"[DEBUG] Processed datapoint {idx}. Target found: {target_found}, Target query: {target_query}")
         
-        # Create enhanced datapoint with new fields
-        enhanced_datapoint = datapoint.copy()
-        enhanced_datapoint['attempted_queries'] = queries_tried
-        enhanced_datapoint['target_query'] = target_query  # None if not found
-        enhanced_datapoint['filter_set'] = filter_set  # None if not found
-        
-        enhanced_dataset.append(enhanced_datapoint)
-        print(f"[DEBUG] Processed datapoint. Target found: {target_found}, Target query: {target_query}")
+        except Exception as e:
+            print(f"[ERROR] Failed to process datapoint {idx}: {e}")
+            import traceback
+            traceback.print_exc()
+            print(f"[ERROR] Continuing with next datapoint...")
+            # Create empty entry to maintain dataset structure
+            enhanced_datapoint = datapoint.copy()
+            enhanced_datapoint['attempted_queries'] = []
+            enhanced_datapoint['target_query'] = None
+            enhanced_datapoint['filter_set'] = None
+            enhanced_dataset.append(enhanced_datapoint)
+            
+            simplified_entry = {
+                'attempted_queries': [],
+                'target_query': None,
+                'filter_set': None,
+                'number_of_priors': len(datapoint.get('prior_sources', [])),
+                'total_attempts': 0
+            }
+            simplified_dataset.append(simplified_entry)
+            continue
     
     # Save enhanced dataset after processing all datapoints
     output_file_path = os.path.join(proj_root, 'results', args.output_path)
@@ -788,12 +826,19 @@ def main():
     print(f"\n[DEBUG] Enhanced dataset saved to: {output_file_path}")
     print(f"[DEBUG] Total datapoints: {len(enhanced_dataset)}")
     
+    # Save simplified dataset
+    simplified_output_path = os.path.join(proj_root, 'results', 'simplified_' + args.output_path)
+    with open(simplified_output_path, 'w', encoding='utf-8') as f:
+        json.dump(simplified_dataset, f, indent=2, ensure_ascii=False)
+    print(f"[DEBUG] Simplified dataset saved to: {simplified_output_path}")
+    print(f"[DEBUG] Total simplified entries: {len(simplified_dataset)}")
+    
 
 
 
     
 
-
+    
 if __name__ == "__main__":
     main()
 
