@@ -378,6 +378,7 @@ def call_llm(prompt, model_name="Qwen/Qwen2.5-3B-Instruct"):
     with torch.no_grad():
         outputs = model.generate(
             **inputs,
+            max_new_tokens=2048,
             temperature=0.7,
             do_sample=True
         )
@@ -611,7 +612,7 @@ def main():
             inputs = tokenizer(text, return_tensors="pt").to(model.device)
 
             with torch.no_grad():
-                outputs = model.generate(**inputs, temperature=0.7)
+                outputs = model.generate(**inputs, max_new_tokens=2048, temperature=0.7)
 
             response = tokenizer.decode(outputs[0], skip_special_tokens=False)
             response = extract_response(response, llm_model_name)
@@ -702,7 +703,7 @@ def main():
                 inputs = tokenizer(text, return_tensors="pt").to(model.device)
 
                 with torch.no_grad():
-                    retry_outputs = model.generate(**inputs, temperature=0.7)
+                    retry_outputs = model.generate(**inputs, max_new_tokens=2048, temperature=0.7)
 
                 retry_response = tokenizer.decode(retry_outputs[0], skip_special_tokens=False)
                 retry_response = extract_response(retry_response, llm_model_name)
