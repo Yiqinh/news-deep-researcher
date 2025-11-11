@@ -827,7 +827,8 @@ def main():
     print(f"[DEBUG] Total datapoints: {len(enhanced_dataset)}")
     
     # Save simplified dataset
-    simplified_output_path = os.path.join(proj_root, 'results', 'simplified_' + args.output_path)
+    simplified_output_path = os.path.join(proj_root, 'results', 'simplified_query_response_10.json')
+    os.makedirs(os.path.dirname(simplified_output_path), exist_ok=True)
     with open(simplified_output_path, 'w', encoding='utf-8') as f:
         json.dump(simplified_dataset, f, indent=2, ensure_ascii=False)
     print(f"[DEBUG] Simplified dataset saved to: {simplified_output_path}")
