@@ -620,7 +620,7 @@ def main():
             response = extract_response(response, llm_model_name)
 
             # Save response to file
-            response_file_path = os.path.join(proj_root, 'results', 'qwen_test_10.jsonl')
+            response_file_path = os.path.join(proj_root, 'results', 'qwen_test_10_2.jsonl')
             os.makedirs(os.path.dirname(response_file_path), exist_ok=True)
             
             # Save as text file (append mode to save all responses)
@@ -838,7 +838,7 @@ def main():
     print(f"[DEBUG] Total datapoints: {len(enhanced_dataset)}")
     
     # Save simplified dataset
-    simplified_output_path = os.path.join(proj_root, 'results', 'simplified_query_response_10.json')
+    simplified_output_path = os.path.join(proj_root, 'results', 'simplified_query_response_10_2.json')
     os.makedirs(os.path.dirname(simplified_output_path), exist_ok=True)
     with open(simplified_output_path, 'w', encoding='utf-8') as f:
         json.dump(simplified_dataset, f, indent=2, ensure_ascii=False)
