@@ -176,6 +176,8 @@ def create_query_generation_retry_prompt(priors, article, starting_query, target
     Create a gap-based retry prompt that learns from failed queries.
     """
     queries_tried_str = "\n".join([f"- '{q}'" for q in queries_tried])
+
+    print (f"queries_tried: {queries_tried}")
     
     retrieved_sources_str = ""
     for i, query in enumerate(queries_tried, 1):
