@@ -733,11 +733,11 @@ def main():
                         
                         # Retrieve
                         document_list = news_searcher.search(query=retry_query, k=args.k)
-            retrieval_result = []
-            for doc in document_list:
-                one_doc = {'page_content': doc.page_content, 'metadata': doc.metadata}
-                retrieval_result.append(one_doc)
-
+                        retrieval_result = []
+                        for doc in document_list:
+                            one_doc = {'page_content': doc.page_content, 'metadata': doc.metadata}
+                            retrieval_result.append(one_doc)
+                        
                         # Store retrieval result for next retry analysis
                         all_retrieval_results.append(retrieval_result)
                         
