@@ -655,7 +655,7 @@ def main():
                     print(f"[DEBUG]  Reached maximum attempts limit ({max_attempts}). Stopping.")
                     break
                     
-            query = query_dict['query']
+                query = query_dict['query']
                 print(f"[DEBUG] Searching with query: {query} (Attempt {total_attempts + 1}/{max_attempts})")
                 queries_tried.append(query)
                 total_attempts += 1
@@ -744,10 +744,10 @@ def main():
                         
                         # Retrieve
                         document_list = news_searcher.search(query=retry_query, k=args.k)
-            retrieval_result = []
-            for doc in document_list:
-                one_doc = {'page_content': doc.page_content, 'metadata': doc.metadata}
-                retrieval_result.append(one_doc)
+                        retrieval_result = []
+                        for doc in document_list:
+                            one_doc = {'page_content': doc.page_content, 'metadata': doc.metadata}
+                            retrieval_result.append(one_doc)
 
                         # Store retrieval result for next retry analysis
                         all_retrieval_results.append(retrieval_result)
@@ -861,7 +861,7 @@ def main():
         stats = {
             'total': total,
             'found': found,
-            'percentage': found / total if total > 0 else 0.0,,
+            'percentage': found / total if total > 0 else 0.0,
         }
     with open(stats_output_path, 'w', encoding='utf-8') as f:
         json.dump(stats, f, indent=2, ensure_ascii=False)
