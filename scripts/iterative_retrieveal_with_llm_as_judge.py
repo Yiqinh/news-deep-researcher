@@ -114,8 +114,7 @@ For **each** gap that the Target Source could fill, generate **one realistic jou
 **Important balance:**
 - Be specific enough to plausibly surface a source like the target.
 - But do **not** hard-code the exact target or outlet.
-- Do not include more than 3 specificity anchors in a single query (anchors = person/organization, topic/bill/event, date/time window, document type, location etc)
-
+- **Balance specificity with flexibility**: Avoid over-constraining queries with too many specific elements (person, organization, topic, date, location, document etc.). Aim for a natural journalist-style query that would realistically surface the target, not a hyper-specific description that essentially describes the exact source.
 
 You **may** use:
 - Proper nouns, entities, places, and dates that appear in the **Article Context**.
@@ -260,8 +259,7 @@ For **each** gap that the Target Source could fill, generate **one realistic jou
 **Still maintain constraints:**
 - Be specific enough to plausibly surface a source like the target.
 - Do **not** hard-code the exact target or outlet.
-- Do not include more than 3 specificity anchors.
-
+- **Balance specificity with flexibility**: Avoid over-constraining queries with too many specific elements (person, organization, topic, date, location , document type etc). Aim for a natural journalist-style query that would realistically surface the target, not a hyper-specific description that essentially describes the exact source.
 **You may use:**
 - Proper nouns, entities, places, and dates from the **Article Context**.
 - Document-type hints (e.g., "press release", "police report", "statement").
@@ -270,6 +268,8 @@ For **each** gap that the Target Source could fill, generate **one realistic jou
 - Exact outlet names or domains from **Prior Sources**.
 - Exact target source wording from the summary.
 - **Similar phrasing or keywords to the failed queries above.**
+
+**IMPORTANT** DO NOT REPEAT QUERIES FROM THE FAILED ONES.
 
 ---
 
@@ -655,7 +655,7 @@ def main():
                     print(f"[DEBUG]  Reached maximum attempts limit ({max_attempts}). Stopping.")
                     break
                     
-                query = query_dict['query']
+            query = query_dict['query']
                 print(f"[DEBUG] Searching with query: {query} (Attempt {total_attempts + 1}/{max_attempts})")
                 queries_tried.append(query)
                 total_attempts += 1
@@ -744,11 +744,11 @@ def main():
                         
                         # Retrieve
                         document_list = news_searcher.search(query=retry_query, k=args.k)
-                        retrieval_result = []
-                        for doc in document_list:
-                            one_doc = {'page_content': doc.page_content, 'metadata': doc.metadata}
-                            retrieval_result.append(one_doc)
-                        
+            retrieval_result = []
+            for doc in document_list:
+                one_doc = {'page_content': doc.page_content, 'metadata': doc.metadata}
+                retrieval_result.append(one_doc)
+
                         # Store retrieval result for next retry analysis
                         all_retrieval_results.append(retrieval_result)
                         
@@ -830,7 +830,7 @@ def main():
             continue
     
     # Save enhanced dataset after processing all datapoints
-    output_file_path = os.path.join(proj_root, 'results', args.output_path)
+    output_file_path = os.path.join(proj_root, 'results', 'raw', 'no_anchor_quer_response_1.json')
     os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
     with open(output_file_path, 'w', encoding='utf-8') as f:
         json.dump(enhanced_dataset, f, indent=2, ensure_ascii=False)
@@ -838,7 +838,7 @@ def main():
     print(f"[DEBUG] Total datapoints: {len(enhanced_dataset)}")
     
     # Save simplified dataset
-    simplified_output_path = os.path.join(proj_root, 'results', 'simplified_query_response_10_2.json')
+    simplified_output_path = os.path.join(proj_root, 'results', 'simplified', 'simplified_no_anchor_quer_response_1.json')
     os.makedirs(os.path.dirname(simplified_output_path), exist_ok=True)
     with open(simplified_output_path, 'w', encoding='utf-8') as f:
         json.dump(simplified_dataset, f, indent=2, ensure_ascii=False)
@@ -846,9 +846,29 @@ def main():
     print(f"[DEBUG] Total simplified entries: {len(simplified_dataset)}")
     
 
-
-
-    
+    # save stats
+    stats_output_path = os.path.join(proj_root, 'results', 'stats','stats_no_anchor_quer_response_1.json')
+    os.makedirs(os.path.dirname(stats_output_path), exist_ok=True)
+    with open(simplified_output_path, 'r', encoding='utf-8') as f:
+        simplified_dataset = json.load(f)
+        total = 0
+        found = 0
+        for entry in simplified_dataset:
+            total += entry['total_attempts']
+            if entry['target_query'] is not None:
+                found += 1
+        
+        stats = {
+            'total': total,
+            'found': found,
+            'percentage': found / total if total > 0 else 0.0,,
+        }
+    with open(stats_output_path, 'w', encoding='utf-8') as f:
+        json.dump(stats, f, indent=2, ensure_ascii=False)
+    print(f"[DEBUG] Stats saved to: {stats_output_path}")
+    print(f"[DEBUG] Total: {total}")
+    print(f"[DEBUG] Found: {found}")
+    print(f"[DEBUG] Percentage: {stats['percentage']}")
 
     
 if __name__ == "__main__":
