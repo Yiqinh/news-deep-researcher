@@ -171,7 +171,8 @@ Return **only** a single JSON object:
 """
 
 
-def create_query_generation_prompt(priors, article, starting_query, target):
+#EDIT: Removed does and do not includes (less specific)
+def create_query_generation_prompt_less_specific(priors, article, starting_query, target):
     return f"""
 You are assisting a journalist in constructing *next-step* search queries to find relevant sources
 from a large corpus of embedded news articles (vector database).
@@ -239,6 +240,7 @@ Each query must:
 
 ## Output Format
 Return **only** a single JSON object:
+***IMPORTANT: THIS IS JUST AN EXAMPLE OF THE OUTPUT FORMAT. DO NOT COPY THIS EXAMPLE.***
 
 {{
   "information_gaps": [
@@ -266,8 +268,106 @@ Return **only** a single JSON object:
   ]
 }}
 """
+#EDIT: vague example output
+def create_query_generation_prompt_less_specific(priors, article, starting_query, target):
+    return f"""
+You are assisting a journalist in constructing *next-step* search queries to find relevant sources
+from a large corpus of embedded news articles (vector database).
 
-def create_query_generation_retry_prompt(priors, article, starting_query, target, queries_tried, query_to_sources):
+Your goal: simulate what the journalist would search **before discovering the Target Source**, while
+reasoning about *how* that Target Source was later used in the article.
+
+---
+
+## Multi-Stage Reasoning Process
+
+### Stage 1 — Identify Article-Grounded Information Gaps
+Read the article and the list of prior sources.
+
+List **3–5 information needs** that are still unresolved.
+
+Each gap must:
+- Be grounded in the article (point to the sentence/paragraph that creates the need).
+- NOT be fully covered by any of the **Prior Sources** (same topic/domain).
+- Be phrased as a natural information-seeking question (e.g. “What did city officials say about the closure?”).
+- Prefer gaps that a journalist would reasonably try to fill next.
+
+Format each gap like:
+- "What ... ? (motivated by: <short quote or sentence from article>)"
+
+---
+
+### Stage 1.5 — Align With the Target Source
+You now see the **Target Source (summary only)**.
+
+First, **generalize** the target to its purpose (e.g. “official agency statement on layoffs”, “detailed background on the policy”, “police incident report”) rather than copying its wording.
+
+Then:
+1. Decide which of the Stage 1 gaps this kind of source would actually help to fill.
+2. For each selected gap, explain in 1–2 sentences how the article uses a source like this
+   (e.g. “adds an official explanation”, “provides numbers”, “supplies a quote from an authority”).
+3. Do **not** copy the target source title or unique wording.
+
+
+---
+
+### Stage 2 — Generate Search Queries
+For **each** gap that the Target Source could fill, generate **one realistic journalist-style search query** (≤ 15 words).
+
+**Important balance:**
+- Be specific enough to plausibly surface a source like the target.
+- But do **not** hard-code the exact target or outlet.
+- **Balance specificity with flexibility**: Avoid over-constraining queries with too many specific elements (person, organization, topic, date, location, document etc.). Aim for a natural journalist-style query that would realistically surface the target, not a hyper-specific description that essentially describes the exact source.
+
+
+Each query must:
+- Address its gap directly.
+- Be semantically distinct from the others.
+- Reflect an *information need*, not a known answer.
+
+---
+
+## Input Information
+- **Starting Query:** {starting_query}
+- **Article Context:** {article}
+- **Prior Sources (title, domain, brief topic):** {priors}
+- **Target Source (summary only):** {target}
+
+---
+
+## Output Format
+Return **only** a single JSON object:
+***IMPORTANT: THIS IS JUST AN EXAMPLE OF THE OUTPUT FORMAT. DO NOT COPY THIS EXAMPLE.***
+
+{{
+  "information_gaps": [
+    {{
+      "gap": "<STRING: natural-language question about what is still unknown>",
+      "motivated_by": "<STRING: short quote or paraphrase from the article that creates this gap>"
+    }},
+    {{
+      "gap": "<STRING: another information need about the article>",
+      "motivated_by": "<STRING: another snippet or paraphrase from the article motivating this gap>"
+    }}
+  ],
+  "filled_gaps": [
+    {{
+      "gap": "<STRING: one of the gaps from information_gaps that the target source helps fill>",
+      "how_used_in_article": "<STRING: how the target source is used in the article (e.g., provides numbers, quotes, justification)>"
+    }}
+  ],
+  "queries": [
+    {{
+      "gap": "<STRING: one of the gaps from information_gaps that this query is trying to address>",
+      "reasoning": "<STRING: 2–3 sentences explaining why this query should help retrieve a source like the target>",
+      "query": "<STRING: short (≤ 15 words), realistic journalist-style search query; no placeholders like TOPIC_A/ACTOR_X>"
+    }}
+  ]
+}}
+
+"""
+
+def create_query_generation_retry_prompt_OG(priors, article, starting_query, target, queries_tried, query_to_sources):
     """
     Create a gap-based retry prompt that learns from failed queries.
     """
@@ -409,6 +509,151 @@ Return **only** a single JSON object:
       "reasoning": "The target appears to be an official statement. Previous queries retrieved news articles, so this query focuses on official statements rather than news coverage.",
       "how_different": "Uses 'official statement' instead of 'news about' to avoid retrieving news articles",
       "query": "official statement city officials closure reasons"
+    }}
+  ]
+}}
+"""
+
+#EDIT: vague output example
+def create_query_generation_retry_prompt_OG(priors, article, starting_query, target, queries_tried, query_to_sources):
+    """
+    Create a gap-based retry prompt that learns from failed queries.
+    """
+    queries_tried_str = "\n".join([f"- '{q}'" for q in queries_tried])
+
+    print (f"queries_tried: {queries_tried}")
+    
+    retrieved_sources_str = ""
+    for i, query in enumerate(queries_tried, 1):
+        retrieved_sources = query_to_sources.get(query, [])
+        sources_json = json.dumps(retrieved_sources, indent=2, ensure_ascii=False)
+        retrieved_sources_str += f"\n\nQuery {i}: '{query}'\nRetrieved sources (full dictionaries):\n{sources_json}"
+    
+    return f"""
+You are assisting a journalist in constructing *next-step* search queries to find a specific target source
+from a large corpus of embedded news articles (vector database).
+
+**CRITICAL: Previous queries did NOT successfully retrieve the Target Source.**
+
+---
+
+## Previous Attempts (Failed)
+
+The following queries were tried but did not retrieve the Target Source:
+
+{queries_tried_str}
+
+**What was retrieved instead (full source dictionaries):**
+{retrieved_sources_str}
+
+**Key insight:** The queries above retrieved sources that are NOT the target. Use this information to generate queries that are different and more likely to succeed. The new queries must differ significantly from all previously failed queries.
+They should explore alternative angles, stakeholders, mechanisms, document types, etc — not merely rephrase the same concept. If a new query is only a rewording of an old one, discard it and generate a more distinct alternative.
+
+---
+
+## Multi-Stage Reasoning Process (Revised)
+
+### Stage 1 — Re-identify Information Gaps (Learning from Failures)
+
+Read the article and the list of prior sources. **Importantly, consider what gaps the failed queries were trying to address and why they didn't work.**
+
+List **3–5 information needs** that are still unresolved. **Focus on gaps that:**
+- Were NOT successfully addressed by the failed queries
+- Require a different approach than what was tried
+- Might need a different angle, specificity level, or keyword choice
+
+Each gap must:
+- Be grounded in the article (point to the sentence/paragraph that creates the need).
+- NOT be fully covered by any of the **Prior Sources** (same topic/domain).
+- Be phrased as a natural information-seeking question.
+- **Be different from the gaps that the failed queries addressed.**
+
+Format each gap like:
+- "What ... ? (motivated by: <short quote or sentence from article>)"
+
+---
+
+### Stage 1.5 — Align With Target Source (Learning What to Avoid)
+
+You now see the **Target Source (summary only)**.
+
+First, **generalize** the target to its purpose (e.g. "official agency statement on layoffs", "detailed background on the policy", "police incident report").
+
+**Then analyze why previous queries failed:**
+1. What kind of sources did the failed queries retrieve? (e.g., news articles, different outlets, different document types)
+2. How do those retrieved sources differ from the Target Source?
+3. What should the new queries do differently to avoid retrieving the same wrong sources?
+
+Then:
+1. Decide which of the Stage 1 gaps this kind of source would actually help to fill.
+2. For each selected gap, explain in 1–2 sentences how the article uses a source like this.
+3. **Explain how your approach differs from the failed queries.**
+
+---
+
+### Stage 2 — Generate NEW Search Queries (Learning from Mistakes)
+
+For **each** gap that the Target Source could fill, generate **one realistic journalist-style search query** (≤ 15 words) that:
+
+**MUST be different from failed queries:**
+- Use different keywords or phrasing
+- Try a different angle or specificity level
+- Focus on different aspects of the gap
+- Avoid approaches that retrieved wrong sources
+
+**Still maintain constraints:**
+- Be specific enough to plausibly surface a source like the target.
+- Do **not** hard-code the exact target or outlet.
+- **Balance specificity with flexibility**: Avoid over-constraining queries with too many specific elements (person, organization, topic, date, location , document type etc). Aim for a natural journalist-style query that would realistically surface the target, not a hyper-specific description that essentially describes the exact source.
+**You may use:**
+- Proper nouns, entities, places, and dates from the **Article Context**.
+- Document-type hints (e.g., "press release", "police report", "statement").
+
+**You must not use:**
+- Exact outlet names or domains from **Prior Sources**.
+- Exact target source wording from the summary.
+- **Similar phrasing or keywords to the failed queries above.**
+
+**IMPORTANT** DO NOT REPEAT QUERIES FROM THE FAILED ONES.
+
+---
+
+## Input Information
+
+- **Starting Query:** {starting_query}
+- **Article Context:** {article}
+- **Prior Sources (title, domain, brief topic):** {priors}
+- **Target Source (summary only):** {target}
+- **Failed Queries:** {queries_tried_str}
+
+---
+
+## Output Format
+
+Return **only** a single JSON object:
+
+{{
+  "information_gaps": [
+    {{
+      "gap": "<STRING: natural-language question about what is still unknown>",
+      "motivated_by": "<STRING: short quote or paraphrase from the article that creates this gap>"
+    }},
+    {{
+      "gap": "<STRING: another information need about the article>",
+      "motivated_by": "<STRING: another snippet or paraphrase from the article motivating this gap>"
+    }}
+  ],
+  "filled_gaps": [
+    {{
+      "gap": "<STRING: one of the gaps from information_gaps that the target source helps fill>",
+      "how_used_in_article": "<STRING: how the target source is used in the article (e.g., provides numbers, quotes, justification)>"
+    }}
+  ],
+  "queries": [
+    {{
+      "gap": "<STRING: one of the gaps from information_gaps that this query is trying to address>",
+      "reasoning": "<STRING: 2–3 sentences explaining why this query should help retrieve a source like the target>",
+      "query": "<STRING: short (≤ 15 words), realistic journalist-style search query; no placeholders like TOPIC_A/ACTOR_X>"
     }}
   ]
 }}
@@ -927,7 +1172,7 @@ def main():
             continue
     
     # Save enhanced dataset after processing all datapoints
-    output_file_path = os.path.join(proj_root, 'results', 'raw', 'no_anchor_quer_response_3.json')
+    output_file_path = os.path.join(proj_root, 'results', 'raw', 'no_anchor_quer_response_4_vague_output.json')
     os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
     with open(output_file_path, 'w', encoding='utf-8') as f:
         json.dump(enhanced_dataset, f, indent=2, ensure_ascii=False)
@@ -935,7 +1180,7 @@ def main():
     print(f"[DEBUG] Total datapoints: {len(enhanced_dataset)}")
     
     # Save simplified dataset
-    simplified_output_path = os.path.join(proj_root, 'results', 'simplified', 'simplified_no_anchor_quer_response_3.json')
+    simplified_output_path = os.path.join(proj_root, 'results', 'simplified', 'simplified_no_anchor_quer_response_4_vague_output.json')
     os.makedirs(os.path.dirname(simplified_output_path), exist_ok=True)
     with open(simplified_output_path, 'w', encoding='utf-8') as f:
         json.dump(simplified_dataset, f, indent=2, ensure_ascii=False)
@@ -944,7 +1189,7 @@ def main():
     
 
     # save stats
-    stats_output_path = os.path.join(proj_root, 'results', 'stats','stats_no_anchor_quer_response_3.json')
+    stats_output_path = os.path.join(proj_root, 'results', 'stats','stats_no_anchor_quer_response_4_vague_output.json')
     os.makedirs(os.path.dirname(stats_output_path), exist_ok=True)
     with open(simplified_output_path, 'r', encoding='utf-8') as f:
         simplified_dataset = json.load(f)
