@@ -515,7 +515,7 @@ Return **only** a single JSON object:
 """
 
 #EDIT: vague output example
-def create_query_generation_retry_prompt_OG(priors, article, starting_query, target, queries_tried, query_to_sources):
+def create_query_generation_retry_prompt(priors, article, starting_query, target, queries_tried, query_to_sources):
     """
     Create a gap-based retry prompt that learns from failed queries.
     """
