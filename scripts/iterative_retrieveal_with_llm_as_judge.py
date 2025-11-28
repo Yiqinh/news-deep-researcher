@@ -930,7 +930,7 @@ def main():
 
     news_searcher = Searcher(index_name=args.index_name, model_name=args.model_name)
 
-    for idx, datapoint in enumerate(combined_dataset[10:25], 1):
+    for idx, datapoint in enumerate(combined_dataset, 1):
         print(f"\n{'='*60}")
         print(f"[DEBUG] Processing datapoint {idx}/10")
         print(f"{'='*60}\n")
