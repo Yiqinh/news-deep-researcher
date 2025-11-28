@@ -66,7 +66,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def create_query_generation_prompt(priors, article, starting_query, target):
+def create_query_generation_prompt_OG(priors, article, starting_query, target):
     return f"""
 You are assisting a journalist in constructing *next-step* search queries to find relevant sources
 from a large corpus of embedded news articles (vector database).
@@ -123,6 +123,103 @@ You **may** use:
 You **must not** use:
 - Exact outlet names or domains that already appear in **Prior Sources**.
 - Exact target source wording from the summary.
+
+
+Each query must:
+- Address its gap directly.
+- Be semantically distinct from the others.
+- Reflect an *information need*, not a known answer.
+
+---
+
+## Input Information
+- **Starting Query:** {starting_query}
+- **Article Context:** {article}
+- **Prior Sources (title, domain, brief topic):** {priors}
+- **Target Source (summary only):** {target}
+
+---
+
+## Output Format
+Return **only** a single JSON object:
+
+{{
+  "information_gaps": [
+    {{
+      "gap": "What did city officials say about the closure?",
+      "motivated_by": "City officials announced... but no statement is quoted."
+    }},
+    {{
+      "gap": "How did regulators justify the decision?",
+      "motivated_by": "The article says the decision followed a review..."
+    }}
+  ],
+  "filled_gaps": [
+    {{
+      "gap": "What did city officials say about the closure?",
+      "how_used_in_article": "Article uses the source to quote the city's justification and timing of the closure."
+    }}
+  ],
+  "queries": [
+    {{
+      "gap": "What did city officials say about the closure?",
+      "reasoning": "The target appears to be an official statement explaining the closure, so we search for a city/government statement on that event, excluding already used outlets.",
+      "query": "city statement on [event/closure] explaining reasons and timing"
+    }}
+  ]
+}}
+"""
+
+
+def create_query_generation_prompt(priors, article, starting_query, target):
+    return f"""
+You are assisting a journalist in constructing *next-step* search queries to find relevant sources
+from a large corpus of embedded news articles (vector database).
+
+Your goal: simulate what the journalist would search **before discovering the Target Source**, while
+reasoning about *how* that Target Source was later used in the article.
+
+---
+
+## Multi-Stage Reasoning Process
+
+### Stage 1 — Identify Article-Grounded Information Gaps
+Read the article and the list of prior sources.
+
+List **3–5 information needs** that are still unresolved.
+
+Each gap must:
+- Be grounded in the article (point to the sentence/paragraph that creates the need).
+- NOT be fully covered by any of the **Prior Sources** (same topic/domain).
+- Be phrased as a natural information-seeking question (e.g. “What did city officials say about the closure?”).
+- Prefer gaps that a journalist would reasonably try to fill next.
+
+Format each gap like:
+- "What ... ? (motivated by: <short quote or sentence from article>)"
+
+---
+
+### Stage 1.5 — Align With the Target Source
+You now see the **Target Source (summary only)**.
+
+First, **generalize** the target to its purpose (e.g. “official agency statement on layoffs”, “detailed background on the policy”, “police incident report”) rather than copying its wording.
+
+Then:
+1. Decide which of the Stage 1 gaps this kind of source would actually help to fill.
+2. For each selected gap, explain in 1–2 sentences how the article uses a source like this
+   (e.g. “adds an official explanation”, “provides numbers”, “supplies a quote from an authority”).
+3. Do **not** copy the target source title or unique wording.
+
+
+---
+
+### Stage 2 — Generate Search Queries
+For **each** gap that the Target Source could fill, generate **one realistic journalist-style search query** (≤ 15 words).
+
+**Important balance:**
+- Be specific enough to plausibly surface a source like the target.
+- But do **not** hard-code the exact target or outlet.
+- **Balance specificity with flexibility**: Avoid over-constraining queries with too many specific elements (person, organization, topic, date, location, document etc.). Aim for a natural journalist-style query that would realistically surface the target, not a hyper-specific description that essentially describes the exact source.
 
 
 Each query must:
