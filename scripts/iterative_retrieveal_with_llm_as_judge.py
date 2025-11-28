@@ -830,7 +830,7 @@ def main():
             continue
     
     # Save enhanced dataset after processing all datapoints
-    output_file_path = os.path.join(proj_root, 'results', 'raw', 'no_anchor_quer_response_1.json')
+    output_file_path = os.path.join(proj_root, 'results', 'raw', 'no_anchor_quer_response_2.json')
     os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
     with open(output_file_path, 'w', encoding='utf-8') as f:
         json.dump(enhanced_dataset, f, indent=2, ensure_ascii=False)
@@ -838,7 +838,7 @@ def main():
     print(f"[DEBUG] Total datapoints: {len(enhanced_dataset)}")
     
     # Save simplified dataset
-    simplified_output_path = os.path.join(proj_root, 'results', 'simplified', 'simplified_no_anchor_quer_response_0.json')
+    simplified_output_path = os.path.join(proj_root, 'results', 'simplified', 'simplified_no_anchor_quer_response_2.json')
     os.makedirs(os.path.dirname(simplified_output_path), exist_ok=True)
     with open(simplified_output_path, 'w', encoding='utf-8') as f:
         json.dump(simplified_dataset, f, indent=2, ensure_ascii=False)
@@ -847,7 +847,7 @@ def main():
     
 
     # save stats
-    stats_output_path = os.path.join(proj_root, 'results', 'stats','stats_no_anchor_quer_response_0.json')
+    stats_output_path = os.path.join(proj_root, 'results', 'stats','stats_no_anchor_quer_response_2.json')
     os.makedirs(os.path.dirname(stats_output_path), exist_ok=True)
     with open(simplified_output_path, 'r', encoding='utf-8') as f:
         simplified_dataset = json.load(f)
