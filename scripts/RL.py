@@ -8,6 +8,7 @@ from sentence_transformers import util
 import torch
 import torch.nn.functional as F
 from datasets import Dataset
+from transformers import AutoModelForCausalLM, AutoTokenizer
 import os
 import sys
 import re
@@ -111,7 +112,9 @@ def embedding_similarity_reward(prompts, completions, ground_truth_text, **kwarg
 
     return rewards
 
-def create_dataset(file_path):
+def create_dataset(file_path, model_name="Qwen/Qwen3-8B"):
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+
     with open(file_path, 'r', encoding='utf-8') as f:
         raw_data = json.load(f)
 
@@ -123,12 +126,24 @@ def create_dataset(file_path):
             embed_string += v
             embed_string += '\n'
         
-        processed_data.append({
-            "prompt": get_prompt(entry['starting_query']['model_output'], entry.get('prior_sources', [])), 
-            "ground_truth_text": embed_string,
-        })
+            raw_content = get_prompt(entry['starting_query']['model_output'], entry.get('prior_sources', []))
+            
+            messages = [
+                {"role": "user", "content": raw_content}
+            ]
 
-    # Create the HF Dataset
+            formatted_prompt = tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True,
+                enable_thinking=True
+            )
+
+            processed_data.append({
+                "prompt": formatted_prompt, 
+                "ground_truth_text": embed_string,
+            })
+
     hf_dataset = Dataset.from_list(processed_data)
     return hf_dataset
 
