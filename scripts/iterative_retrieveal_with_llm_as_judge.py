@@ -1229,18 +1229,18 @@ def main():
     stats_output_path = os.path.join(proj_root, 'results', 'stats','stats_Query_and_filter_sft_data_1.json')
     os.makedirs(os.path.dirname(stats_output_path), exist_ok=True)
     
-        total = 0
-        found = 0
-        for entry in simplified_dataset:
-            total += entry['total_attempts']
-            if entry['target_query'] is not None:
-                found += 1
+    total = 0
+    found = 0
+    for entry in simplified_dataset:
+        total += entry['total_attempts']
+        if entry['target_query'] is not None:
+            found += 1
         
-        stats = {
-            'total': total,
-            'found': found,
-            'percentage': found / total if total > 0 else 0.0,
-        }
+    stats = {
+        'total': total,
+        'found': found,
+        'percentage': found / total if total > 0 else 0.0,
+    }
     with open(stats_output_path, 'w', encoding='utf-8') as f:
         json.dump(stats, f, indent=2, ensure_ascii=False)
     print(f"[DEBUG] Stats saved to: {stats_output_path}")
