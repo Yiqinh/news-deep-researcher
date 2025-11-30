@@ -885,6 +885,42 @@ def get_all_retrieved_sources(queries_tried, all_retrieval_results):
     return query_to_sources
 
 
+def save_checkpoint(enhanced_dataset, simplified_dataset, output_dir, checkpoint_num=None):
+    """
+    Save current progress to checkpoint files.
+    
+    Args:
+        enhanced_dataset: List of enhanced datapoints
+        simplified_dataset: List of simplified datapoints
+        output_dir: Base output directory
+        checkpoint_num: Optional checkpoint number (if None, saves to final files)
+    """
+    if checkpoint_num is not None:
+        # Save checkpoint files
+        raw_checkpoint = os.path.join(output_dir, 'raw', f'checkpoint_{checkpoint_num}.json')
+        simplified_checkpoint = os.path.join(output_dir, 'simplified', f'checkpoint_{checkpoint_num}.json')
+    else:
+        # Save final files
+        raw_checkpoint = os.path.join(output_dir, 'raw', 'Query_and_filter_sft_data_1.json')
+        simplified_checkpoint = os.path.join(output_dir, 'simplified', 'Query_and_filter_sft_data_1.json')
+    
+    os.makedirs(os.path.dirname(raw_checkpoint), exist_ok=True)
+    os.makedirs(os.path.dirname(simplified_checkpoint), exist_ok=True)
+    
+    # Save enhanced dataset
+    with open(raw_checkpoint, 'w', encoding='utf-8') as f:
+        json.dump(enhanced_dataset, f, indent=2, ensure_ascii=False)
+    
+    # Save simplified dataset
+    with open(simplified_checkpoint, 'w', encoding='utf-8') as f:
+        json.dump(simplified_dataset, f, indent=2, ensure_ascii=False)
+    
+    if checkpoint_num is not None:
+        print(f"[CHECKPOINT] Saved checkpoint {checkpoint_num}: {len(enhanced_dataset)} datapoints")
+    else:
+        print(f"[DEBUG] Final save: {len(enhanced_dataset)} datapoints")
+
+
 def main():
     # Parse arguments
     args = parse_args()
@@ -899,6 +935,8 @@ def main():
         combined_dataset = json.load(f)
     print(f"[DEBUG] Loaded {len(combined_dataset)} datapoints from combined dataset")
 
+    # Checkpoint saving configuration
+    SAVE_INTERVAL = 50  # Save every 50 datapoints
     
     # Load LLM model
     print(f"[DEBUG] Loading LLM model: {llm_model_name}...")
@@ -930,9 +968,10 @@ def main():
 
     news_searcher = Searcher(index_name=args.index_name, model_name=args.model_name)
 
+    total_datapoints = len(combined_dataset)
     for idx, datapoint in enumerate(combined_dataset, 1):
         print(f"\n{'='*60}")
-        print(f"[DEBUG] Processing datapoint {idx}/10")
+        print(f"[DEBUG] Processing datapoint {idx}/{total_datapoints}")
         print(f"{'='*60}\n")
         
         try:
@@ -1148,6 +1187,13 @@ def main():
             simplified_dataset.append(simplified_entry)
             
             print(f"[DEBUG] Processed datapoint {idx}. Target found: {target_found}, Target query: {target_query}")
+            
+            # Periodic checkpoint saving
+            if idx % SAVE_INTERVAL == 0:
+                checkpoint_num = idx // SAVE_INTERVAL
+                save_checkpoint(enhanced_dataset, simplified_dataset, 
+                              os.path.join(proj_root, 'results'), 
+                              checkpoint_num=checkpoint_num)
         
         except Exception as e:
             print(f"[ERROR] Failed to process datapoint {idx}: {e}")
@@ -1171,28 +1217,18 @@ def main():
             simplified_dataset.append(simplified_entry)
             continue
     
-    # Save enhanced dataset after processing all datapoints
-    output_file_path = os.path.join(proj_root, 'results', 'raw', 'Query_and_filter_sft_data_1.json')
-    os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
-    with open(output_file_path, 'w', encoding='utf-8') as f:
-        json.dump(enhanced_dataset, f, indent=2, ensure_ascii=False)
-    print(f"\n[DEBUG] Enhanced dataset saved to: {output_file_path}")
+    # Final save (overwrites any incomplete checkpoint)
+    print(f"\n[DEBUG] Processing complete. Saving final dataset...")
+    save_checkpoint(enhanced_dataset, simplified_dataset, 
+                   os.path.join(proj_root, 'results'), 
+                   checkpoint_num=None)
     print(f"[DEBUG] Total datapoints: {len(enhanced_dataset)}")
-    
-    # Save simplified dataset
-    simplified_output_path = os.path.join(proj_root, 'results', 'simplified', 'Query_and_filter_sft_data_1.json')
-    os.makedirs(os.path.dirname(simplified_output_path), exist_ok=True)
-    with open(simplified_output_path, 'w', encoding='utf-8') as f:
-        json.dump(simplified_dataset, f, indent=2, ensure_ascii=False)
-    print(f"[DEBUG] Simplified dataset saved to: {simplified_output_path}")
     print(f"[DEBUG] Total simplified entries: {len(simplified_dataset)}")
-    
 
     # save stats
     stats_output_path = os.path.join(proj_root, 'results', 'stats','stats_Query_and_filter_sft_data_1.json')
     os.makedirs(os.path.dirname(stats_output_path), exist_ok=True)
-    with open(simplified_output_path, 'r', encoding='utf-8') as f:
-        simplified_dataset = json.load(f)
+    
         total = 0
         found = 0
         for entry in simplified_dataset:
@@ -1208,9 +1244,9 @@ def main():
     with open(stats_output_path, 'w', encoding='utf-8') as f:
         json.dump(stats, f, indent=2, ensure_ascii=False)
     print(f"[DEBUG] Stats saved to: {stats_output_path}")
-    print(f"[DEBUG] Total: {total}")
+    print(f"[DEBUG] Total attempts: {total}")
     print(f"[DEBUG] Found: {found}")
-    print(f"[DEBUG] Percentage: {stats['percentage']}")
+    print(f"[DEBUG] Percentage: {stats['percentage']:.2%}")
 
     
 if __name__ == "__main__":
