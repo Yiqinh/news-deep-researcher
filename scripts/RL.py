@@ -32,7 +32,8 @@ def get_prompt(starting_query, formatted_priors):
         Your goal is to formulate a **follow-up search query** to dig deeper into a story, given the initial intent and the information found so far.
 
         ### Input Context
-        1. **Journalist's Original Intent:** "{starting_query}"
+        1. **Journalist's Original Intent:** 
+        "{starting_query}"
         2. **Information Already Found (Priors):**
         {formatted_priors}
 
@@ -67,7 +68,7 @@ def get_prompt(starting_query, formatted_priors):
 
 def embedding_similarity_reward(prompts, completions, ground_truth_text, **kwargs): 
 
-    query_pattern = re.compile(r'"query"\s*:\s*"(.*?)"', re.DOTALL)
+    query_pattern = re.compile(r'"query"\s*:\s*"( (?: [^"\\] | \\. )* )"', re.VERBOSE | re.DOTALL)
 
     rewards = []
     ground_truths = kwargs['ground_truth_text']
