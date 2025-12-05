@@ -34,3 +34,6 @@ def main():
     incomplete_datapoints, no_press_release_text = remove_incomplete_datapoints(sft_data_fp)
     print(f"Incomplete datapoints: {incomplete_datapoints}")
     print(f"No press release text: {no_press_release_text}")
+
+if __name__ == "__main__":
+    main()
