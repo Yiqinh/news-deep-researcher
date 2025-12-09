@@ -55,7 +55,7 @@ def main():
     total_missing = 0
 
     for item in sft_data:
-        if item[0]['article']['press_release_text'] is None:
+        if item['article']['press_release_text'] is None:
             missing_press_release += 1
             total_missing += 1
             continue
