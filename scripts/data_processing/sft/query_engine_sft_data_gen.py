@@ -49,21 +49,45 @@ def main():
     with open(sft_data_fp, 'r') as f:
         sft_data = json.load(f)
     
+    non_dict_items = 0
+    non_dict_article = 0
+    non_dict_starting_query = 0
     missing_press_release = 0
     missing_starting_query = 0
     missing_formatted_priors = 0
     total_missing = 0
 
     for item in sft_data:
-        if item['article']['press_release_text'] is None:
+        if not isinstance(item, dict):
+            non_dict_items += 1
+            total_missing += 1
+            continue
+
+        article = item.get('article')
+        if not isinstance(article, dict):
+            non_dict_article += 1
             missing_press_release += 1
             total_missing += 1
             continue
-        if item['starting_query']['model_output'] is None:
+
+        if article.get('press_release_text') is None:
+            missing_press_release += 1
+            total_missing += 1
+            continue
+
+        starting_query = item.get('starting_query')
+        if not isinstance(starting_query, dict):
+            non_dict_starting_query += 1
             missing_starting_query += 1
             total_missing += 1
             continue
-        if item['prior_sources'] is None:
+
+        if starting_query.get('model_output') is None:
+            missing_starting_query += 1
+            total_missing += 1
+            continue
+
+        if item.get('prior_sources') is None:
             missing_formatted_priors += 1
             total_missing += 1
             continue
@@ -75,6 +99,9 @@ def main():
         #prompt_text = create_promp_text(press_release, starting_query, formatted_priors)
         #print(prompt_text)
     
+    print(f"Non-dict items: {non_dict_items}")
+    print(f"Non-dict article field: {non_dict_article}")
+    print(f"Non-dict starting_query field: {non_dict_starting_query}")
     print(f"Missing press release: {missing_press_release}")
     print(f"Missing starting query: {missing_starting_query}")
     print(f"Missing formatted priors: {missing_formatted_priors}")
