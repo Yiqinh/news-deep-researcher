@@ -85,7 +85,7 @@ def main():
             total_missing += 1
             missing_starting_query_index = index
             print(f"Missing starting query at index: {missing_starting_query_index}")
-            break
+            return
 
         if starting_query.get('model_output') is None:
             missing_starting_query += 1
