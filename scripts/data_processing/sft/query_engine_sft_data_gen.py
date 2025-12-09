@@ -56,8 +56,11 @@ def main():
     missing_starting_query = 0
     missing_formatted_priors = 0
     total_missing = 0
+    missing_starting_query_index = 0
+    index = 0
 
     for item in sft_data:
+        index += 1
         if not isinstance(item, dict):
             non_dict_items += 1
             total_missing += 1
@@ -80,7 +83,9 @@ def main():
             non_dict_starting_query += 1
             missing_starting_query += 1
             total_missing += 1
-            continue
+            missing_starting_query_index = index
+            print(f"Missing starting query at index: {missing_starting_query_index}")
+            break
 
         if starting_query.get('model_output') is None:
             missing_starting_query += 1
