@@ -45,7 +45,7 @@ You must output **strictly valid JSON** in the following format (no markdown cod
 
 def main():
     sft_data_fp = '/lfs/local/0/aaronjohn/news-deep-researcher/results/raw/Query_engine_sft_data_ready.json'
-    output_fp = '/lfs/local/0/aaronjohn/news-deep-researcher/results/raw/Query_engine_sft_formatted.json'
+    output_fp = '/lfs/local/0/aaronjohn/news-deep-researcher/results/raw/Query_engine_sft_final_data_cleaned_1.json'
     
     with open(sft_data_fp, 'r') as f:
         sft_data = json.load(f)
