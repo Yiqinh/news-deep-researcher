@@ -113,10 +113,13 @@ def main():
         prompt_text = create_promp_text(press_release, starting_query_text, formatted_priors)
         output_text = item['target_query']
         
+        # Format completion as JSON to match the prompt's expected output format
+        completion_json = json.dumps([{"query": output_text}], ensure_ascii=False)
+        
         # Create SFT format entry (prompt-completion format)
         sft_entry = {
             "prompt": prompt_text,
-            "completion": output_text
+            "completion": completion_json
         }
         
         formatted_sft_data.append(sft_entry)
