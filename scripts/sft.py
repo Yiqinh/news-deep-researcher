@@ -10,9 +10,6 @@ model = AutoModelForCausalLM.from_pretrained(model_name, device_map="auto")
 
 dataset = load_dataset("json", data_files=data_path, split="train")
 
-def formatting_func(ex):
-    return ex["prompt"] + ex["completion"]
-
 training_args = SFTConfig(
     output_dir="./query_engine_sft",
     per_device_train_batch_size=1,
@@ -30,7 +27,6 @@ trainer = SFTTrainer(
     model=model,
     args=training_args,
     train_dataset=dataset,
-    formatting_func=formatting_func,
 )
 
 trainer.train()
