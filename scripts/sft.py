@@ -1,6 +1,7 @@
 from datasets import load_dataset
 from transformers import AutoTokenizer, AutoModelForCausalLM, TrainingArguments
-from trl import SFTTrainer, DataCollatorForCompletionOnlyLM
+from trl import SFTTrainer
+from trl.trainer.utils import DataCollatorForCompletionOnlyLM
 
 model_name = "Qwen/Qwen2.5-7B-Instruct"
 data_path = "/lfs/local/0/aaronjohn/news-deep-researcher/results/raw/Query_engine_sft_final_data_cleaned_1.json"
