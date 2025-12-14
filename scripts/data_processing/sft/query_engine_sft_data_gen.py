@@ -90,7 +90,9 @@ def main():
         if starting_query.get('model_output') is None:
             missing_starting_query += 1
             total_missing += 1
-            continue
+            missing_starting_query_index = index
+            print(f"Missing starting query at index: {missing_starting_query_index}")
+            return
 
         if item.get('prior_sources') is None:
             missing_formatted_priors += 1
