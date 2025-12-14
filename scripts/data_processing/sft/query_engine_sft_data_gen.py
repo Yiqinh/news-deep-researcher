@@ -79,20 +79,12 @@ def main():
             continue
 
         starting_query = item.get('starting_query')
-        if not isinstance(starting_query, dict):
-            non_dict_starting_query += 1
-            missing_starting_query += 1
-            total_missing += 1
-            missing_starting_query_index = index
-            print(f"Missing starting query at index: {missing_starting_query_index}")
-            return
 
         if starting_query.get('model_output') is None:
             missing_starting_query += 1
             total_missing += 1
             missing_starting_query_index = index
-            print(f"Missing starting query at index: {missing_starting_query_index}")
-            return
+            continue
 
         if item.get('prior_sources') is None:
             missing_formatted_priors += 1
