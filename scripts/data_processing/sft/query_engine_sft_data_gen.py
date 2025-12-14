@@ -56,6 +56,7 @@ def main():
     missing_starting_query = 0
     missing_formatted_priors = 0
     total_missing = 0
+    missing_target_query = 0
     missing_starting_query_index = 0
     index = 0
 
@@ -91,12 +92,16 @@ def main():
             total_missing += 1
             continue
         
+        if item.get('target_query') is None:
+            missing_target_query += 1
+            total_missing += 1
+            continue
         
-        #press_release = item[0]['article']['press_release_text']
-        #starting_query = item['starting_query']['model_output']
-        #formatted_priors = item['prior_sources']
-        #prompt_text = create_promp_text(press_release, starting_query, formatted_priors)
-        #print(prompt_text)
+        press_release = item[0]['article']['press_release_text']
+        starting_query = item['starting_query']['model_output']
+        formatted_priors = item['prior_sources']
+        prompt_text = create_promp_text(press_release, starting_query, formatted_priors)
+        output_text = item['target_query']
     
     print(f"Non-dict items: {non_dict_items}")
     print(f"Non-dict article field: {non_dict_article}")
@@ -104,6 +109,7 @@ def main():
     print(f"Missing press release: {missing_press_release}")
     print(f"Missing starting query: {missing_starting_query}")
     print(f"Missing formatted priors: {missing_formatted_priors}")
+    print(f"Missing target query: {missing_target_query}")
     print(f"Total missing: {total_missing}")
 
 
