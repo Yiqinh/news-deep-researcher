@@ -97,7 +97,7 @@ def main():
             total_missing += 1
             continue
         
-        press_release = item[0]['article']['press_release_text']
+        press_release = item['article']['press_release_text']
         starting_query = item['starting_query']['model_output']
         formatted_priors = item['prior_sources']
         prompt_text = create_promp_text(press_release, starting_query, formatted_priors)
